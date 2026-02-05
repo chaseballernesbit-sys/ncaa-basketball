@@ -4,7 +4,7 @@
 
 cd /Users/mac/Documents/ncaa-basketball
 
-export ODDS_API_KEY="e87c7ea619e4235d4a7026db65625bd0"
+export ODDS_API_KEY="baf9e5c0d5bb1ad4fbdcabe9766fff22"
 export NCAA_EMAIL_FROM="chaseballernesbit@gmail.com"
 export NCAA_EMAIL_PASSWORD="jgjb meus qtjc zkpv"
 export NCAA_EMAIL_TO="chaseballernesbit@gmail.com"
