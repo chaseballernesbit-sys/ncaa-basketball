@@ -1,0 +1,21 @@
+# NCAA Basketball Prediction System - Dependencies
+
+# Core scraping
+requests>=2.28.0
+beautifulsoup4>=4.11.0
+lxml>=4.9.0
+
+# Data handling
+pandas>=1.5.0
+numpy>=1.23.0
+
+# Team name fuzzy matching (optional but recommended)
+fuzzywuzzy>=0.18.0
+python-Levenshtein>=0.20.0
+
+# Selenium for Cloudflare bypass (optional - only needed if BartTorvik blocks)
+selenium>=4.8.0
+webdriver-manager>=3.8.0
+
+# For date/time handling
+python-dateutil>=2.8.0

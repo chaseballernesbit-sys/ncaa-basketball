@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.env
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Data files (large, frequently changing)
+data/
+logs/
+kenpom/*.csv
+
+# Temporary files
+*.log
+*.tmp
+
+# IDE
+.idea/
+.vscode/
+*.swp
