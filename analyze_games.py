@@ -1299,17 +1299,24 @@ class NCAAAnalyzer:
                 ml_pick_price = None
 
             # Add confident winner picks (model says they win AND reasonable odds)
+            # QUALITY FILTER: Winner must have decent AdjEM
+            winner_adjem = analysis.get('home' if winner == home else 'away', {}).get('adj_em', 0)
+            if winner_adjem is None:
+                winner_adjem = 0
+
             if winner_ml is not None and winner_ml > -500 and confidence in ["HIGH", "MEDIUM"]:
-                ml_str = f"+{winner_ml}" if winner_ml > 0 else str(winner_ml)
-                moneyline_picks.append({
-                    'pick': f"{winner} ML ({ml_str})",
-                    'opponent': loser,
-                    'confidence': confidence,
-                    'margin': margin,
-                    'edge': ml_edge if ml_pick_team == winner else 0,
-                    'stars': ml_stars if ml_pick_team == winner else 0,
-                    'is_underdog': False,
-                })
+                if winner_adjem >= MIN_ADJEM_TO_BET:
+                    ml_str = f"+{winner_ml}" if winner_ml > 0 else str(winner_ml)
+                    moneyline_picks.append({
+                        'pick': f"{winner} ML ({ml_str})",
+                        'opponent': loser,
+                        'confidence': confidence,
+                        'margin': margin,
+                        'edge': ml_edge if ml_pick_team == winner else 0,
+                        'stars': ml_stars if ml_pick_team == winner else 0,
+                        'is_underdog': False,
+                        'adj_em': winner_adjem,
+                    })
 
             # =============================================================
             # HIGH-VALUE UNDERDOG ML (3+ stars, positive odds)
@@ -1326,8 +1333,18 @@ class NCAAAnalyzer:
                     is_very_bad = pick_quality.get('is_very_bad', False)
                     is_cold = pick_quality.get('is_cold', False)
 
+                    # QUALITY FILTER: Underdog must have decent AdjEM
+                    ml_pick_adjem = analysis.get('away' if ml_pick_team == away else 'home', {}).get('adj_em', 0)
+                    if ml_pick_adjem is None:
+                        ml_pick_adjem = 0
+
+                    if ml_pick_adjem < MIN_ADJEM_TO_BET:
+                        avoid_games.append({
+                            'game': f"{away} vs {home}",
+                            'reason': f"Model liked {ml_pick_team} ML but AdjEM too low ({ml_pick_adjem:+.1f})"
+                        })
                     # Skip if team is below .400 or very bad or on cold streak
-                    if win_pct < 0.40:
+                    elif win_pct < 0.40:
                         avoid_games.append({
                             'game': f"{away} vs {home}",
                             'reason': f"Model liked {ml_pick_team} ML but win% too low ({win_pct:.1%})"
@@ -1370,6 +1387,43 @@ class NCAAAnalyzer:
                 edge = abs(sv.get('value_points', 0))
                 stars = sv.get('confidence_stars', 0)
 
+                # Import thresholds from config
+                from config import (MAX_SPREAD_THRESHOLD, LARGE_SPREAD_THRESHOLD,
+                                   LARGE_SPREAD_EXTRA_EDGE, MIN_ADJEM_TO_BET)
+
+                # QUALITY FILTER: Use AdjEM (Adjusted Efficiency Margin) to filter
+                # AdjEM > 0 = above average, AdjEM < -5 = poor team
+                pick_data = analysis.get('away' if sv['pick_team'] == 'AWAY' else 'home', {})
+                pick_adjem = pick_data.get('adj_em', 0)
+                if pick_adjem is None:
+                    pick_adjem = 0
+
+                # Skip teams with very low AdjEM (bad teams are unpredictable)
+                if pick_adjem < MIN_ADJEM_TO_BET:
+                    avoid_games.append({
+                        'game': f"{away} vs {home}",
+                        'reason': f"{pick_team} AdjEM too low ({pick_adjem:+.1f}) - need > {MIN_ADJEM_TO_BET}"
+                    })
+                    continue
+
+                # RISK MANAGEMENT: Skip very large spreads (blowout risk)
+                if abs(spread) > MAX_SPREAD_THRESHOLD:
+                    avoid_games.append({
+                        'game': f"{away} vs {home}",
+                        'reason': f"Spread too large ({spread:+.1f}) - blowout risk"
+                    })
+                    continue
+
+                # RISK MANAGEMENT: Require extra edge for large spreads
+                if abs(spread) > LARGE_SPREAD_THRESHOLD:
+                    required_edge = 3.0 + LARGE_SPREAD_EXTRA_EDGE  # Base 3 + extra
+                    if edge < required_edge:
+                        avoid_games.append({
+                            'game': f"{away} vs {home}",
+                            'reason': f"Large spread ({spread:+.1f}) needs {required_edge:.1f}+ edge, only has {edge:.1f}"
+                        })
+                        continue
+
                 # Quality check for spread picks
                 pick_quality = away_quality if sv['pick_team'] == 'AWAY' else home_quality
                 is_very_bad = pick_quality.get('is_very_bad', False)
@@ -1399,12 +1453,23 @@ class NCAAAnalyzer:
                     quality_note = " (reduced: weak conf)"
 
                 if adjusted_stars >= 3:  # Only include 3+ star spread picks after adjustment
+                    # Get predicted scores from expected calculation
+                    expected = analysis.get('expected', {})
+                    away_score = expected.get('away_score', 0)
+                    home_score = expected.get('home_score', 0)
+
                     spread_picks.append({
                         'pick': f"{pick_team} {spread:+.1f}",
+                        'team': pick_team,
                         'opponent': opp_team,
                         'edge': edge,
                         'stars': adjusted_stars,
                         'model_spread': sv.get('final_predicted', 0),
+                        'actual_line': spread,
+                        'away_team': away,
+                        'home_team': home,
+                        'away_score': away_score,
+                        'home_score': home_score,
                         'quality_note': quality_note,
                     })
 
@@ -1417,6 +1482,15 @@ class NCAAAnalyzer:
                 predicted_total = tv.get('predicted_total', 0)
                 edge = abs(tv.get('value_points', 0))
                 stars = tv.get('confidence_stars', 0)
+
+                # QUALITY FILTER: At least one team should be decent for totals
+                from config import MIN_ADJEM_FOR_TOTALS
+                home_adjem = analysis.get('home', {}).get('adj_em', 0) or 0
+                away_adjem = analysis.get('away', {}).get('adj_em', 0) or 0
+
+                best_adjem = max(home_adjem, away_adjem)
+                if best_adjem < MIN_ADJEM_FOR_TOTALS:
+                    continue  # Skip totals for low-quality matchups
 
                 if stars >= 3:  # Only include 3+ star totals picks
                     totals_picks.append({
@@ -1479,15 +1553,18 @@ class NCAAAnalyzer:
         spread_picks.sort(key=lambda x: (-x['stars'], -x['edge']))
 
         if spread_picks:
-            lines.append("**TOP SPREAD PICKS** (3+ points of edge)")
+            lines.append("**MODEL PREDICTIONS vs LINES**")
             lines.append("")
             for p in spread_picks[:12]:
                 stars = "⭐" * p['stars']
                 lines.append(f"  >> {p['pick']} {stars}")
-                lines.append(f"     Edge: {p['edge']:.1f} pts vs line")
+                # Show prediction details
+                if p.get('away_score') and p.get('home_score'):
+                    lines.append(f"     Predicted: {p['away_team'][:15]} {p['away_score']:.0f} - {p['home_team'][:15]} {p['home_score']:.0f}")
+                lines.append(f"     Model spread: {p['model_spread']:+.1f} | Line: {p['actual_line']:+.1f} | Edge: {p['edge']:.1f}")
             lines.append("")
         else:
-            lines.append("No high-value spread picks today.")
+            lines.append("No predictions with edge today.")
             lines.append("")
 
         # =================================================================

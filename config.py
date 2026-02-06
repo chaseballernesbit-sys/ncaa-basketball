@@ -45,14 +45,58 @@ ELITE_HOME_COURTS = {
     "Arizona": 4.5,
 }
 
-# Confidence star thresholds (points of value)
+# Confidence star thresholds (points of value = model vs line difference)
 STAR_THRESHOLDS = {
-    5: 4.0,    # 4+ points of value
-    4: 3.0,    # 3-3.9 points
-    3: 2.5,    # 2.5-2.9 points
-    2: 2.0,    # 2-2.4 points
+    5: 5.0,    # 5+ points model edge
+    4: 4.0,    # 4-4.9 points
+    3: 3.0,    # 3-3.9 points
+    2: 2.0,    # 2-2.9 points
     1: 1.5,    # 1.5-1.9 points
 }
+
+# =============================================================================
+# PREDICTION MODEL SETTINGS
+# =============================================================================
+
+# Minimum gap between model prediction and line to consider a pick
+MIN_MODEL_EDGE = 2.5  # Must have 2.5+ point difference from line
+
+# Maximum odds to bet (avoid heavy juice)
+MAX_FAVORITE_ODDS = -280  # Won't bet favorites heavier than -280
+MIN_UNDERDOG_ODDS = -200  # Won't lay more than -200 on spreads
+
+# Prediction confidence - require agreement across factors
+MIN_PREDICTION_CONFIDENCE = 0.65  # 65%+ confidence in outcome
+
+# =============================================================================
+# SPREAD RISK MANAGEMENT (added based on results tracking)
+# =============================================================================
+
+# Large spreads are riskier - require more edge
+LARGE_SPREAD_THRESHOLD = 15.0  # Spreads over +/-15 are "large"
+LARGE_SPREAD_EXTRA_EDGE = 2.0  # Require 2 extra points of edge for large spreads
+
+# Maximum spread to bet on (blowout risk too high beyond this)
+MAX_SPREAD_THRESHOLD = 22.0  # Don't bet spreads over +/-22
+
+# Power conference vs mid-major caution
+# Mid-major heavy underdogs often get blown out
+POWER_CONFERENCE_THRESHOLD = 10.0  # Extra caution when power conf is -10+ favorite
+
+# =============================================================================
+# TEAM QUALITY FILTER - Focus on quality teams only
+# =============================================================================
+
+# Use AdjEM (Adjusted Efficiency Margin) instead of rank
+# AdjEM > 0 = above average team, AdjEM < 0 = below average
+# Top 100 teams typically have AdjEM > +5
+
+MIN_ADJEM_TO_BET = -5.0  # Only bet on teams with AdjEM > -5 (filters out bottom ~100)
+MIN_ADJEM_FOR_TOTALS = 0.0  # At least one team should be above average for totals
+
+# Alternatively, filter by rank if available (1-100)
+MAX_RANK_TO_BET = 100  # Only bet teams ranked 1-100 (when rank data available)
+ALLOW_FADE_UNRANKED = True  # Can bet ranked team vs unranked opponent
 
 # Unit allocation by star rating
 UNITS_BY_STARS = {
