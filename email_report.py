@@ -72,12 +72,25 @@ def parse_picks_from_analysis(analysis_text: str) -> Dict:
                 team = match.group(1).strip()
                 spread = match.group(2)
                 stars = len(match.group(3))
-                # Get edge from next line
+                # Get edge from next lines (check up to 3 lines for new format)
                 edge = 0
-                if i + 1 < len(lines):
-                    edge_match = re.search(r'Edge:\s*([\d\.]+)\s*pts', lines[i + 1])
-                    if edge_match:
-                        edge = float(edge_match.group(1))
+                predicted_score = ""
+                for j in range(1, 4):
+                    if i + j < len(lines):
+                        next_line = lines[i + j]
+                        # New format: "Model spread: +X.X | Line: +Y.Y | Edge: Z.Z"
+                        edge_match = re.search(r'\|\s*Edge:\s*([\d\.]+)', next_line)
+                        if edge_match:
+                            edge = float(edge_match.group(1))
+                            break
+                        # Old format: "Edge: X.X pts vs line"
+                        edge_match = re.search(r'Edge:\s*([\d\.]+)\s*pts', next_line)
+                        if edge_match:
+                            edge = float(edge_match.group(1))
+                            break
+                        # Capture predicted score
+                        if 'Predicted:' in next_line:
+                            predicted_score = next_line.strip()
                 picks['spreads'].append({
                     'team': team,
                     'spread': spread,
@@ -85,6 +98,7 @@ def parse_picks_from_analysis(analysis_text: str) -> Dict:
                     'edge': edge,
                     'type': 'spread',
                     'odds': -110,  # Standard spread odds
+                    'predicted': predicted_score,
                 })
 
     # Parse totals picks
@@ -209,7 +223,11 @@ def add_betting_math(picks: Dict) -> Dict:
 
 
 def filter_worthy_bets(picks: Dict) -> Dict:
-    """Filter to only bets that are actually worth making"""
+    """Filter to only bets that are actually worth making
+
+    Picks with 3+ stars from the model are included regardless of edge calculation,
+    as the model already validated them as having significant value.
+    """
 
     filtered = {
         'spreads': [],
@@ -219,18 +237,22 @@ def filter_worthy_bets(picks: Dict) -> Dict:
 
     for pick in picks['spreads']:
         a = pick.get('assessment', {})
-        if a.get('true_edge', 0) >= MIN_TRUE_EDGE and a.get('ev_pct', 0) >= MIN_EV:
+        stars = pick.get('stars', 0)
+        # Include if has 3+ stars (model validated) OR meets edge/EV thresholds
+        if stars >= 3 or (a.get('true_edge', 0) >= MIN_TRUE_EDGE and a.get('ev_pct', 0) >= MIN_EV):
             filtered['spreads'].append(pick)
 
     for pick in picks['totals']:
         a = pick.get('assessment', {})
-        if a.get('true_edge', 0) >= MIN_TRUE_EDGE and a.get('ev_pct', 0) >= MIN_EV:
+        stars = pick.get('stars', 0)
+        if stars >= 3 or (a.get('true_edge', 0) >= MIN_TRUE_EDGE and a.get('ev_pct', 0) >= MIN_EV):
             filtered['totals'].append(pick)
 
     for pick in picks['moneylines']:
         a = pick.get('assessment', {})
+        stars = pick.get('stars', 0)
         # For MLs, also check implied prob isn't too high (heavy favorite)
-        if (a.get('true_edge', 0) >= MIN_TRUE_EDGE and
+        if stars >= 3 or (a.get('true_edge', 0) >= MIN_TRUE_EDGE and
             a.get('ev_pct', 0) >= MIN_EV and
             a.get('implied_prob', 1) <= MAX_IMPLIED_PROB):
             filtered['moneylines'].append(pick)
@@ -286,13 +308,19 @@ def build_concise_email(picks: Dict, filtered_picks: Dict) -> str:
         # Format the pick
         if pick['type'] == 'spread':
             lines.append(f"{i}. {pick['team']} {pick['spread']} {stars}")
+            # Add predicted score if available
+            if pick.get('predicted'):
+                lines.append(f"   {pick['predicted']}")
         elif pick['type'] == 'total':
             lines.append(f"{i}. {pick['direction']} {pick['total']} ({pick['game']}) {stars}")
         elif pick['type'] == 'ml':
             lines.append(f"{i}. {pick['team']} ML ({format_odds(pick['odds'])}) {stars}")
 
         # Betting math
-        lines.append(f"   Model: {format_prob(a['model_prob'])} | Break-even: {format_prob(a['implied_prob'])}")
+        if pick['type'] == 'spread' and pick.get('edge', 0) > 0:
+            lines.append(f"   Point Edge: {pick['edge']:.1f} pts | Win Prob: {format_prob(a['model_prob'])}")
+        else:
+            lines.append(f"   Model: {format_prob(a['model_prob'])} | Break-even: {format_prob(a['implied_prob'])}")
         lines.append(f"   True Edge: {format_edge(a['true_edge'])} | EV: {format_ev(a['ev'])}/bet")
         lines.append(f"   Grade: {a['grade']} | Units: {a['units']}")
         lines.append("")
@@ -474,24 +502,19 @@ def main():
     with open(analysis_file) as f:
         analysis_text = f.read()
 
-    # Parse picks
-    picks = parse_picks_from_analysis(analysis_text)
-    print(f"    Parsed {len(picks['spreads'])} spreads, {len(picks['totals'])} totals, {len(picks['moneylines'])} MLs")
+    # Send the analysis report directly (TOP PICKS + sections, skip detailed game analysis)
+    # Cut off at "DETAILED GAME ANALYSIS" to keep email concise
+    cutoff = analysis_text.find("DETAILED GAME ANALYSIS")
+    if cutoff > 0:
+        email_body = analysis_text[:cutoff].rstrip()
+    else:
+        # Fallback: just send first 5000 chars
+        email_body = analysis_text[:5000]
 
-    # Add betting math
-    picks = add_betting_math(picks)
+    print(f"    Sending report ({len(email_body)} chars)")
 
-    # Filter to only worthy bets
-    filtered = filter_worthy_bets(picks)
-    worthy_count = len(filtered['spreads']) + len(filtered['totals']) + len(filtered['moneylines'])
-    print(f"    After filtering: {worthy_count} bets worth making")
-
-    # Build email
-    email_body = build_concise_email(picks, filtered)
-
-    # Send
     today = datetime.now().strftime("%Y-%m-%d")
-    subject = f"🏀 NCAA Picks - {today}"
+    subject = f"NCAA Picks - {today}"
 
     success = send_email(subject, email_body)
     return 0 if success else 1

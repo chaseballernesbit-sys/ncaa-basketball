@@ -24,7 +24,10 @@ from config import (
     DATA_DIR, HOME_COURT_ADVANTAGE, MAX_DAILY_UNITS, ELITE_HOME_COURTS,
     STAR_THRESHOLDS, UNITS_BY_STARS, FOUR_FACTORS_WEIGHTS, FOUR_FACTORS_POINTS,
     SITUATIONAL_ADJUSTMENTS, UPSET_CRITERIA, HIGH_ALTITUDE_VENUES,
-    ALTITUDE_THRESHOLD, TEAM_TIMEZONES, TIMEZONE_OFFSETS, LINE_MOVEMENT
+    ALTITUDE_THRESHOLD, TEAM_TIMEZONES, TIMEZONE_OFFSETS, LINE_MOVEMENT,
+    CONFERENCE_TIER_1, CONFERENCE_TIER_2, CONFERENCE_TIER_3,
+    TIER_CONFIDENCE, SPREAD_EDGE_BY_TIER, TOTAL_EDGE_BY_TIER,
+    MAX_FAVORITE_ODDS, MAX_UNDERDOG_ODDS,
 )
 from team_mappings import normalize_team_name, get_conference_multiplier
 
@@ -37,17 +40,16 @@ class NCAAAnalyzer:
     AVG_EFFICIENCY = 100.0
     AVG_TOTAL = 143.5  # Average D1 total for calibration
 
-    # MAJOR FIX: Increase regression significantly - model was WAY off on totals
-    # Previous: 0.60 -> Now: 0.75 (regress 75% toward mean)
-    TOTAL_REGRESSION = 0.75
+    # Total regression toward mean - reduced since KenPom AdjO/AdjD already
+    # account for strength of schedule. Previous 0.75 was double-counting SOS.
+    TOTAL_REGRESSION = 0.35
 
-    # MAJOR FIX: Reduce efficiency impact - stats are inflated for weak teams
-    # Previous: 0.85 -> Now: 0.70
-    EFFICIENCY_DEFLATOR = 0.70
+    # Efficiency deflator - how much of the raw efficiency differential to use.
+    # KenPom ratings are already well-calibrated, so trust them more.
+    EFFICIENCY_DEFLATOR = 0.82
 
-    # MAJOR FIX: Reduce tempo impact on totals (was over-predicting)
-    # Previous: 0.8 -> Now: 0.4
-    TEMPO_TOTAL_FACTOR = 0.4
+    # Tempo impact on totals - moderate factor for pace-adjusted total
+    TEMPO_TOTAL_FACTOR = 0.5
 
     # Strength of schedule thresholds
     SOS_ELITE_THRESHOLD = 0.03  # Top ~15% SOS
@@ -94,7 +96,10 @@ class NCAAAnalyzer:
                 'new', 'san', 'saint', 'st', 'utah', 'oregon', 'washington',
                 'arizona', 'colorado', 'kentucky', 'tennessee', 'alabama',
                 'mississippi', 'louisiana', 'iowa', 'minnesota', 'wisconsin',
-                'illinois', 'central', 'eastern', 'western', 'northern', 'southern'
+                'illinois', 'central', 'eastern', 'western', 'northern', 'southern',
+                'houston', 'purdue', 'duke', 'stanford', 'rice', 'temple',
+                'loyola', 'xavier', 'clemson', 'auburn', 'army', 'navy',
+                'columbia', 'portland', 'detroit', 'denver', 'hawaii',
             }
 
             # Two-word combinations that are separate teams - don't use as fallback
@@ -151,6 +156,137 @@ class NCAAAnalyzer:
             win_pct = wins / total if total > 0 else 0.5
             return wins, losses, win_pct
         return 0, 0, 0.5
+
+    def resolve_conference(self, team_name: str, team_data: Dict) -> str:
+        """Resolve conference for a team, handling mascot name mismatches.
+        e.g. 'Purdue Fort Wayne Mastodons' -> looks up 'Purdue Fort Wayne' -> 'Horz'"""
+        conf = team_data.get('conference', '')
+        if conf:
+            return conf
+        import re
+        # Strip trailing mascot
+        base = re.sub(r'\s+(Wildcats|Bears|Tigers|Lions|Eagles|Hawks|Bulldogs|Huskies|'
+                      r'Cougars|Panthers|Cardinals|Demons|Knights|Miners|Mustangs|'
+                      r'Raiders|Rebels|Rockets|Owls|Rams|Bobcats|Bruins|Cavaliers|'
+                      r'Chanticleers|Crusaders|Dons|Flames|Flyers|Gaels|Governors|'
+                      r'Grizzlies|Hilltoppers|Hornets|Javelinas|Jaguars|Lumberjacks|'
+                      r'Mastodons|Musketeers|Peacocks|Penguins|Phoenix|Pioneers|'
+                      r'Racers|Red Wolves|Retrievers|Roadrunners|Salukis|Seawolves|'
+                      r'Skyhawks|Spartans|Texans|Thunderbirds|Trojans|Volunteers|'
+                      r'Warhawks|Warriors|Wolf Pack|Wolverines|Terriers|Bisons|'
+                      r'Golden Eagles|Rainbow Warriors|Lancers|Lopes|Mountain Hawks)$',
+                      '', team_name)
+        # Try exact match with stripped name
+        if base != team_name and base in self.teams:
+            return self.teams[base].get('conference', '')
+        # Try common abbreviation variants (State->St., Saint->St., etc.)
+        variants = [base]
+        if 'State' in base:
+            variants.append(base.replace('State', 'St.'))
+        if 'St.' in base:
+            variants.append(base.replace('St.', 'State'))
+        if 'Saint' in base:
+            variants.append(base.replace('Saint', 'St.'))
+        if 'Southern' in base:
+            variants.append(base.replace('Southern', 'So.'))
+        if 'Northern' in base:
+            variants.append(base.replace('Northern', 'No.'))
+        for v in variants:
+            if v in self.teams:
+                c = self.teams[v].get('conference', '')
+                if c:
+                    return c
+        return ''
+
+    def get_conference_tier(self, conference: str) -> int:
+        """Get conference tier (1=Power, 2=Strong mid, 3=Mid, 4=Low)"""
+        if conference in CONFERENCE_TIER_1:
+            return 1
+        elif conference in CONFERENCE_TIER_2:
+            return 2
+        elif conference in CONFERENCE_TIER_3:
+            return 3
+        return 4
+
+    def get_game_tier(self, conf1: str, conf2: str) -> int:
+        """Get the weaker (highest number) tier between two conferences.
+        Cross-conference games are only as reliable as the weaker conference."""
+        t1 = self.get_conference_tier(conf1)
+        t2 = self.get_conference_tier(conf2)
+        # If one is unknown (tier 4), use the other team's tier instead
+        if not conf1:
+            return t2
+        if not conf2:
+            return t1
+        return max(t1, t2)
+
+    def calculate_pick_confidence(self, analysis: Dict) -> float:
+        """
+        Calculate a projection confidence score (0-100) for ranking picks.
+        Based on: data quality, conference tier, AdjEM reliability,
+        Four Factors agreement, and situational clarity.
+        Higher = more confident in the projection.
+        """
+        away_data = analysis.get('away_data', {})
+        home_data = analysis.get('home_data', {})
+        sv = analysis.get('spread_value', {})
+        ff = analysis.get('four_factors', {})
+        expected = analysis.get('expected', {})
+
+        score = 50.0  # Start at neutral
+
+        # 1. Conference tier (biggest factor - Power 5 data is far more reliable)
+        away_name = analysis.get('away_team', '')
+        home_name = analysis.get('home_team', '')
+        away_conf = self.resolve_conference(away_name, away_data)
+        home_conf = self.resolve_conference(home_name, home_data)
+        tier = self.get_game_tier(away_conf, home_conf)
+        tier_mult = TIER_CONFIDENCE.get(tier, 0.35)
+        score += (tier_mult - 0.5) * 40  # +20 for tier 1, -6 for tier 4
+
+        # 2. Data source quality (KenPom + ESPN > ESPN only)
+        sources = set()
+        for d in [away_data, home_data]:
+            for s in d.get('data_sources', []):
+                sources.add(s)
+        if 'kenpom' in sources:
+            score += 10
+        if 'barttorvik' in sources:
+            score += 5
+
+        # 3. AdjEM gap (bigger gap = more predictable outcome)
+        away_em = away_data.get('adj_em') or 0
+        home_em = home_data.get('adj_em') or 0
+        em_gap = abs(away_em - home_em)
+        if em_gap >= 15:
+            score += 8
+        elif em_gap >= 8:
+            score += 4
+        elif em_gap < 3:
+            score -= 5  # Toss-up = less confident
+
+        # 4. Four Factors alignment (do they agree with efficiency?)
+        ff_edge = ff.get('total_edge', 0) if ff else 0
+        model_spread = sv.get('final_predicted', 0) if sv else 0
+        # If Four Factors agree with the efficiency spread direction
+        if (ff_edge > 0 and model_spread > 0) or (ff_edge < 0 and model_spread < 0):
+            score += 5  # Signals align
+        elif abs(ff_edge) > 1.0 and ((ff_edge > 0) != (model_spread > 0)):
+            score -= 5  # Significant disagreement
+
+        # 5. Team quality (both teams above average = more predictable)
+        if away_em > 5 and home_em > 5:
+            score += 5
+        elif away_em < -5 or home_em < -5:
+            score -= 8  # Bad teams are unpredictable
+
+        # 6. Games played (early season = less data)
+        for d in [away_data, home_data]:
+            games = d.get('games', 0) or 0
+            if games < 15:
+                score -= 5
+
+        return max(0, min(100, score))
 
     def get_home_court_advantage(self, home_team: str, neutral: bool = False) -> float:
         """Get home court advantage, accounting for elite venues"""
@@ -216,9 +352,9 @@ class NCAAAnalyzer:
 
     def get_conference_regression_factor(self, conf1: str, conf2: str) -> float:
         """
-        Get additional regression factor based on conference quality.
-        Weak conference games need MORE regression toward the mean.
-        Power 5 games should trust efficiency more.
+        Get regression factor based on conference quality.
+        KenPom ratings already account for SOS, so we only apply light
+        regression to handle small-sample noise in weaker conferences.
 
         Returns: regression factor (lower = trust efficiency more)
         """
@@ -226,23 +362,23 @@ class NCAAAnalyzer:
         one_weak = conf1 in self.WEAK_CONFERENCES or conf2 in self.WEAK_CONFERENCES
         both_mid = conf1 in self.MID_MAJOR_CONFERENCES and conf2 in self.MID_MAJOR_CONFERENCES
 
-        # Power 5 conferences - trust efficiency more
+        # Power 5 conferences - trust KenPom efficiency ratings heavily
         power_5 = ['SEC', 'Big Ten', 'Big 12', 'ACC', 'Pac-12', 'Big East']
         both_power5 = conf1 in power_5 and conf2 in power_5
         one_power5 = conf1 in power_5 or conf2 in power_5
 
         if both_weak:
-            return 0.80  # Regress 80% to mean for SWAC/MEAC type games
+            return 0.50  # Weak conferences have noisier stats
         elif one_weak:
-            return 0.75
+            return 0.45
         elif both_mid:
-            return 0.70
+            return 0.40
         elif both_power5:
-            return 0.55  # Trust Power 5 efficiency more
+            return 0.20  # Trust Power 5 KenPom ratings heavily
         elif one_power5:
-            return 0.60
+            return 0.25
         else:
-            return 0.65  # Default regression
+            return 0.35  # Default - light regression
 
     # =========================================================================
     # CORE CALCULATIONS
@@ -806,29 +942,25 @@ class NCAAAnalyzer:
         # Value calculation (positive = away covers, negative = home covers)
         value = actual_spread - final_predicted
 
-        # MAJOR FIX: Higher threshold for spread picks
-        # Previous: 2.0 points
-        # New: 3.0 points - need more cushion
-        if value >= 3.0:
+        # Use a base threshold - actual filtering is done per-conference in report
+        if value >= 1.5:
             pick_team = 'AWAY'
-        elif value <= -3.0:
+        elif value <= -1.5:
             pick_team = 'HOME'
         else:
             pick_team = 'PASS'
 
-        # MAJOR FIX: More conservative star ratings
-        # Previous: 4 pts = 5 stars
-        # New: 6 pts = 5 stars
+        # Star ratings based on edge size
         abs_value = abs(value)
         if abs_value >= 6.0:
             stars = 5
-        elif abs_value >= 5.0:
+        elif abs_value >= 4.5:
             stars = 4
-        elif abs_value >= 4.0:
-            stars = 3
         elif abs_value >= 3.5:
+            stars = 3
+        elif abs_value >= 2.5:
             stars = 2
-        elif abs_value >= 3.0:
+        elif abs_value >= 1.5:
             stars = 1
         else:
             stars = 0
@@ -982,28 +1114,23 @@ class NCAAAnalyzer:
 
         value = predicted_total - actual_total
 
-        # MAJOR FIX: Much higher thresholds for totals
-        # Previous: 5+ points
-        # New: 8+ points required - Vegas is almost always right on totals
-        if value >= 8.0:
+        # Base threshold - actual filtering is done per-conference in report
+        if value >= 5.0:
             pick = 'OVER'
-        elif value <= -8.0:
+        elif value <= -5.0:
             pick = 'UNDER'
         else:
             pick = 'PASS'
 
         abs_value = abs(value)
 
-        # MAJOR FIX: Very conservative star ratings for totals
-        # Previous: 8 = 5 stars
-        # New: 12+ = 5 stars (almost never happens if we're calibrated right)
         if abs_value >= 12.0:
             stars = 5
-        elif abs_value >= 10.0:
-            stars = 4
         elif abs_value >= 9.0:
+            stars = 4
+        elif abs_value >= 7.0:
             stars = 3
-        elif abs_value >= 8.0:
+        elif abs_value >= 5.0:
             stars = 2
         else:
             stars = 0
@@ -1226,7 +1353,11 @@ class NCAAAnalyzer:
 
         # =================================================================
         # COLLECT ALL PICKS BY TYPE
+        # Prioritize by PROJECTION CONFIDENCE, not pure EV edge
         # =================================================================
+        from config import (SPREAD_EDGE_BY_TIER, TOTAL_EDGE_BY_TIER,
+                           MAX_FAVORITE_ODDS, MAX_UNDERDOG_ODDS, MIN_ADJEM_TO_BET)
+
         moneyline_picks = []
         spread_picks = []
         totals_picks = []
@@ -1246,6 +1377,14 @@ class NCAAAnalyzer:
             away_ml = ml_data.get('away_ml')
             home_ml = ml_data.get('home_ml')
 
+            # Calculate projection confidence for this game
+            pick_confidence = self.calculate_pick_confidence(analysis)
+
+            # Get conference tier for threshold adjustment
+            away_conf = self.resolve_conference(away, analysis.get('away_data', {}))
+            home_conf = self.resolve_conference(home, analysis.get('home_data', {}))
+            game_tier = self.get_game_tier(away_conf, home_conf)
+
             # Determine predicted winner and confidence
             if predicted_spread < -1.5:
                 winner, loser = away, home
@@ -1258,34 +1397,26 @@ class NCAAAnalyzer:
                 winner_ml = home_ml
                 confidence = "HIGH" if margin >= 10 else "MEDIUM" if margin >= 5 else "LOW"
             else:
-                # Model shows toss-up - still check for spread/total value!
-                winner, loser = home, away  # Default to home
+                winner, loser = home, away
                 margin = abs(predicted_spread)
                 winner_ml = home_ml
                 confidence = "TOSS-UP"
 
             spread_val = abs(sv.get('value_points', 0))
 
-            # Only add to avoid if no spread value
-            if confidence == "TOSS-UP" and spread_val < 3:
+            if confidence == "TOSS-UP" and spread_val < 1.5:
                 avoid_games.append({
                     'game': f"{away} vs {home}",
-                    'reason': "Model shows toss-up, no spread value"
-                })
-            elif confidence == "LOW" and spread_val < 3:
-                avoid_games.append({
-                    'game': f"{away} vs {home}",
-                    'reason': f"Low confidence ({margin:.1f} pts), no spread value"
+                    'reason': "Model shows toss-up"
                 })
 
             # =============================================================
-            # MONEYLINE PICKS (who wins) - Include confident picks
+            # MONEYLINE PICKS - who wins, filtered by reasonable odds
             # =============================================================
             ml_stars = ml_data.get('ml_stars', 0)
             ml_edge = ml_data.get('ml_value', 0)
-            ml_pick_type = ml_data.get('ml_pick')  # 'AWAY_ML' or 'HOME_ML'
+            ml_pick_type = ml_data.get('ml_pick')
 
-            # Determine which team the ML pick is for
             if ml_pick_type == 'AWAY_ML':
                 ml_pick_team = away
                 ml_pick_opp = home
@@ -1298,14 +1429,15 @@ class NCAAAnalyzer:
                 ml_pick_team = None
                 ml_pick_price = None
 
-            # Add confident winner picks (model says they win AND reasonable odds)
-            # QUALITY FILTER: Winner must have decent AdjEM
             winner_adjem = analysis.get('home' if winner == home else 'away', {}).get('adj_em', 0)
             if winner_adjem is None:
                 winner_adjem = 0
 
-            if winner_ml is not None and winner_ml > -500 and confidence in ["HIGH", "MEDIUM"]:
-                if winner_adjem >= MIN_ADJEM_TO_BET:
+            # Include winner picks - filter out crazy heavy favorites and longshots
+            if winner_ml is not None and confidence in ["HIGH", "MEDIUM"]:
+                odds_ok = (winner_ml >= MAX_FAVORITE_ODDS and
+                          (winner_ml <= MAX_UNDERDOG_ODDS or winner_ml < 0))
+                if odds_ok and winner_adjem >= MIN_ADJEM_TO_BET:
                     ml_str = f"+{winner_ml}" if winner_ml > 0 else str(winner_ml)
                     moneyline_picks.append({
                         'pick': f"{winner} ML ({ml_str})",
@@ -1314,26 +1446,26 @@ class NCAAAnalyzer:
                         'margin': margin,
                         'edge': ml_edge if ml_pick_team == winner else 0,
                         'stars': ml_stars if ml_pick_team == winner else 0,
-                        'is_underdog': False,
+                        'is_underdog': winner_ml > 0,
                         'adj_em': winner_adjem,
+                        'pick_confidence': pick_confidence,
+                        'tier': game_tier,
                     })
 
             # =============================================================
-            # HIGH-VALUE UNDERDOG ML (3+ stars, positive odds)
-            # MAJOR FIX: Filter out bad teams - don't bet underdogs below .400
+            # UNDERDOG ML - model says underdog wins, reasonable odds
             # =============================================================
             away_quality = analysis.get('away_quality', {})
             home_quality = analysis.get('home_quality', {})
 
-            if ml_stars >= 3 and ml_pick_team and ml_pick_price is not None:
-                if ml_pick_price > 100:  # Underdog with value
-                    # QUALITY CHECK: Don't recommend ML underdogs on bad teams
+            if ml_pick_team and ml_pick_price is not None:
+                # Underdog with reasonable odds (not a crazy longshot)
+                if ml_pick_price > 100 and ml_pick_price <= MAX_UNDERDOG_ODDS:
                     pick_quality = away_quality if ml_pick_team == away else home_quality
                     win_pct = pick_quality.get('win_pct', 0.5)
                     is_very_bad = pick_quality.get('is_very_bad', False)
                     is_cold = pick_quality.get('is_cold', False)
 
-                    # QUALITY FILTER: Underdog must have decent AdjEM
                     ml_pick_adjem = analysis.get('away' if ml_pick_team == away else 'home', {}).get('adj_em', 0)
                     if ml_pick_adjem is None:
                         ml_pick_adjem = 0
@@ -1343,7 +1475,6 @@ class NCAAAnalyzer:
                             'game': f"{away} vs {home}",
                             'reason': f"Model liked {ml_pick_team} ML but AdjEM too low ({ml_pick_adjem:+.1f})"
                         })
-                    # Skip if team is below .400 or very bad or on cold streak
                     elif win_pct < 0.40:
                         avoid_games.append({
                             'game': f"{away} vs {home}",
@@ -1362,23 +1493,23 @@ class NCAAAnalyzer:
                         })
                     else:
                         ml_str = f"+{ml_pick_price}"
-                        # Check if not already added as a winner pick
                         already_added = any(ml_pick_team in p['pick'] for p in moneyline_picks)
                         if not already_added:
                             moneyline_picks.append({
                                 'pick': f"{ml_pick_team} ML ({ml_str})",
                                 'opponent': ml_pick_opp,
-                                'confidence': f"VALUE",
+                                'confidence': f"UPSET",
                                 'margin': 0,
                                 'edge': ml_edge,
                                 'stars': ml_stars,
                                 'is_underdog': True,
                                 'win_pct': win_pct,
+                                'pick_confidence': pick_confidence,
+                                'tier': game_tier,
                             })
 
             # =============================================================
-            # SPREAD PICKS (against the spread)
-            # MAJOR FIX: Add quality filter for spread picks too
+            # SPREAD PICKS - conference-tiered thresholds
             # =============================================================
             if sv.get('pick_team') not in ['PASS', 'NO_LINE', None]:
                 pick_team = away if sv['pick_team'] == 'AWAY' else home
@@ -1387,94 +1518,51 @@ class NCAAAnalyzer:
                 edge = abs(sv.get('value_points', 0))
                 stars = sv.get('confidence_stars', 0)
 
-                # Import thresholds from config
                 from config import (MAX_SPREAD_THRESHOLD, LARGE_SPREAD_THRESHOLD,
-                                   LARGE_SPREAD_EXTRA_EDGE, MIN_ADJEM_TO_BET)
+                                   LARGE_SPREAD_EXTRA_EDGE)
 
-                # QUALITY FILTER: Use AdjEM (Adjusted Efficiency Margin) to filter
-                # AdjEM > 0 = above average, AdjEM < -5 = poor team
-                pick_data = analysis.get('away' if sv['pick_team'] == 'AWAY' else 'home', {})
-                pick_adjem = pick_data.get('adj_em', 0)
-                if pick_adjem is None:
-                    pick_adjem = 0
+                # Conference-tiered edge threshold
+                min_edge = SPREAD_EDGE_BY_TIER.get(game_tier, 5.0)
 
-                # Skip teams with very low AdjEM (bad teams are unpredictable)
-                if pick_adjem < MIN_ADJEM_TO_BET:
-                    avoid_games.append({
-                        'game': f"{away} vs {home}",
-                        'reason': f"{pick_team} AdjEM too low ({pick_adjem:+.1f}) - need > {MIN_ADJEM_TO_BET}"
-                    })
+                # Skip if edge doesn't meet tier threshold
+                if edge < min_edge:
                     continue
 
-                # RISK MANAGEMENT: Skip very large spreads (blowout risk)
-                if abs(spread) > MAX_SPREAD_THRESHOLD:
-                    avoid_games.append({
-                        'game': f"{away} vs {home}",
-                        'reason': f"Spread too large ({spread:+.1f}) - blowout risk"
-                    })
-                    continue
-
-                # RISK MANAGEMENT: Require extra edge for large spreads
-                if abs(spread) > LARGE_SPREAD_THRESHOLD:
-                    required_edge = 3.0 + LARGE_SPREAD_EXTRA_EDGE  # Base 3 + extra
-                    if edge < required_edge:
-                        avoid_games.append({
-                            'game': f"{away} vs {home}",
-                            'reason': f"Large spread ({spread:+.1f}) needs {required_edge:.1f}+ edge, only has {edge:.1f}"
-                        })
-                        continue
-
-                # Quality check for spread picks
                 pick_quality = away_quality if sv['pick_team'] == 'AWAY' else home_quality
                 is_very_bad = pick_quality.get('is_very_bad', False)
-                is_losing_team = pick_quality.get('is_losing_team', False)
-                is_weak_conf = pick_quality.get('is_weak_conference', False)
                 win_pct = pick_quality.get('win_pct', 0.5)
 
-                # MAJOR FIX: Skip spread picks entirely for very bad teams
+                # Skip very bad teams and huge spreads
                 if is_very_bad:
-                    avoid_games.append({
-                        'game': f"{away} vs {home}",
-                        'reason': f"Model liked {pick_team} spread but team is very bad ({win_pct:.0%})"
-                    })
-                    continue  # Skip this pick entirely
+                    continue
+                if abs(spread) > MAX_SPREAD_THRESHOLD:
+                    continue
+                if abs(spread) > LARGE_SPREAD_THRESHOLD and edge < min_edge + LARGE_SPREAD_EXTRA_EDGE:
+                    continue
 
-                # Reduce stars for losing teams in weak conferences
-                adjusted_stars = stars
-                quality_note = ""
-                if is_losing_team and is_weak_conf:
-                    adjusted_stars = max(1, stars - 2)
-                    quality_note = " (reduced: losing team, weak conf)"
-                elif is_losing_team:
-                    adjusted_stars = max(1, stars - 1)
-                    quality_note = " (reduced: losing team)"
-                elif is_weak_conf and win_pct < 0.45:
-                    adjusted_stars = max(1, stars - 1)
-                    quality_note = " (reduced: weak conf)"
+                # Get predicted scores
+                expected = analysis.get('expected', {})
+                away_score = expected.get('away_score', 0)
+                home_score = expected.get('home_score', 0)
 
-                if adjusted_stars >= 3:  # Only include 3+ star spread picks after adjustment
-                    # Get predicted scores from expected calculation
-                    expected = analysis.get('expected', {})
-                    away_score = expected.get('away_score', 0)
-                    home_score = expected.get('home_score', 0)
-
-                    spread_picks.append({
-                        'pick': f"{pick_team} {spread:+.1f}",
-                        'team': pick_team,
-                        'opponent': opp_team,
-                        'edge': edge,
-                        'stars': adjusted_stars,
-                        'model_spread': sv.get('final_predicted', 0),
-                        'actual_line': spread,
-                        'away_team': away,
-                        'home_team': home,
-                        'away_score': away_score,
-                        'home_score': home_score,
-                        'quality_note': quality_note,
-                    })
+                spread_picks.append({
+                    'pick': f"{pick_team} {spread:+.1f}",
+                    'team': pick_team,
+                    'opponent': opp_team,
+                    'edge': edge,
+                    'stars': stars,
+                    'model_spread': sv.get('final_predicted', 0),
+                    'actual_line': spread,
+                    'away_team': away,
+                    'home_team': home,
+                    'away_score': away_score,
+                    'home_score': home_score,
+                    'pick_confidence': pick_confidence,
+                    'tier': game_tier,
+                })
 
             # =============================================================
-            # TOTALS PICKS (over/under)
+            # TOTALS PICKS - conference-tiered thresholds
             # =============================================================
             if tv.get('pick') not in ['PASS', 'NO_LINE', None]:
                 ou = tv.get('pick')
@@ -1483,100 +1571,159 @@ class NCAAAnalyzer:
                 edge = abs(tv.get('value_points', 0))
                 stars = tv.get('confidence_stars', 0)
 
-                # QUALITY FILTER: At least one team should be decent for totals
-                from config import MIN_ADJEM_FOR_TOTALS
-                home_adjem = analysis.get('home', {}).get('adj_em', 0) or 0
-                away_adjem = analysis.get('away', {}).get('adj_em', 0) or 0
+                # Conference-tiered edge threshold
+                min_total_edge = TOTAL_EDGE_BY_TIER.get(game_tier, 9.0)
 
-                best_adjem = max(home_adjem, away_adjem)
-                if best_adjem < MIN_ADJEM_FOR_TOTALS:
-                    continue  # Skip totals for low-quality matchups
-
-                if stars >= 3:  # Only include 3+ star totals picks
+                if edge >= min_total_edge:
                     totals_picks.append({
                         'pick': f"{ou} {actual_total}",
                         'game': f"{away} vs {home}",
                         'predicted': predicted_total,
                         'edge': edge,
                         'stars': stars,
+                        'pick_confidence': pick_confidence,
+                        'tier': game_tier,
                     })
 
         # =================================================================
-        # SECTION 1: MONEYLINE PICKS (Who Wins)
+        # SECTION 0: BEST BETS (Top picks across all categories)
+        # Sorted by projection confidence, not EV edge
+        # =================================================================
+
+        tier_labels = {1: "P5", 2: "Mid+", 3: "Mid", 4: "Low"}
+
+        # Combine all picks with confidence scores
+        all_ranked_picks = []
+        for p in spread_picks:
+            all_ranked_picks.append({
+                'type': 'SPREAD', 'display': p['pick'],
+                'detail': f"Model: {p['model_spread']:+.1f} | Line: {p['actual_line']:+.1f}",
+                'score_detail': f"{p['away_team'][:15]} {p['away_score']:.0f} - {p['home_team'][:15]} {p['home_score']:.0f}" if p.get('away_score') else "",
+                'confidence': p.get('pick_confidence', 50),
+                'edge': p['edge'], 'stars': p['stars'],
+                'tier': p.get('tier', 4),
+            })
+        for p in moneyline_picks:
+            if p.get('is_underdog') and p['confidence'] == 'UPSET':
+                all_ranked_picks.append({
+                    'type': 'ML UPSET', 'display': p['pick'],
+                    'detail': f"vs {p['opponent']} | Model edge: {p['edge']:.1f}%",
+                    'score_detail': '',
+                    'confidence': p.get('pick_confidence', 50),
+                    'edge': p['edge'], 'stars': p['stars'],
+                    'tier': p.get('tier', 4),
+                })
+        for p in totals_picks:
+            all_ranked_picks.append({
+                'type': 'TOTAL', 'display': p['pick'],
+                'detail': f"{p['game']} | Model: {p['predicted']:.1f}",
+                'score_detail': '',
+                'confidence': p.get('pick_confidence', 50),
+                'edge': p['edge'], 'stars': p['stars'],
+                'tier': p.get('tier', 4),
+            })
+
+        # Sort by confidence score (higher = better), then by tier (lower = better)
+        all_ranked_picks.sort(key=lambda x: (-x['confidence'], x['tier'], -x['edge']))
+
+        lines.append("TOP PICKS (Ranked by Projection Confidence)")
+        lines.append("=" * 70)
+        lines.append("")
+
+        if all_ranked_picks:
+            for i, p in enumerate(all_ranked_picks[:15], 1):
+                stars = "⭐" * p['stars']
+                tier_str = tier_labels.get(p['tier'], '?')
+                lines.append(f"  {i:2d}. [{p['type']:9s}] {p['display']} {stars}  [{tier_str}]")
+                if p.get('score_detail'):
+                    lines.append(f"      Projected: {p['score_detail']}")
+                lines.append(f"      {p['detail']}")
+                lines.append("")
+        else:
+            lines.append("No picks today.")
+            lines.append("")
+
+        # =================================================================
+        # SECTION 1: MONEYLINE PICKS
         # =================================================================
         lines.append("MONEYLINE PICKS")
         lines.append("=" * 70)
         lines.append("")
 
-        # Separate by type
-        high_conf_ml = [p for p in moneyline_picks if p['confidence'] == 'HIGH']
-        med_conf_ml = [p for p in moneyline_picks if p['confidence'] == 'MEDIUM']
-        value_underdogs = [p for p in moneyline_picks if p.get('is_underdog') and p.get('confidence') == 'VALUE']
+        # Sort by confidence score, not raw edge
+        high_conf_ml = sorted([p for p in moneyline_picks if p['confidence'] == 'HIGH'],
+                              key=lambda x: -x.get('pick_confidence', 0))
+        med_conf_ml = sorted([p for p in moneyline_picks if p['confidence'] == 'MEDIUM'],
+                             key=lambda x: -x.get('pick_confidence', 0))
+        upset_picks = sorted([p for p in moneyline_picks if p['confidence'] == 'UPSET'],
+                             key=lambda x: -x.get('pick_confidence', 0))
 
         if high_conf_ml:
-            lines.append("**HIGH CONFIDENCE WINNERS** (10+ pt margin)")
+            lines.append("**CONFIDENT WINNERS** (10+ pt projected margin)")
             lines.append("")
-            for p in high_conf_ml[:5]:
-                lines.append(f"  >> {p['pick']} vs {p['opponent']}")
-                lines.append(f"     Model margin: {p['margin']:.1f} pts")
+            for p in high_conf_ml[:6]:
+                tier_str = tier_labels.get(p.get('tier', 4), '?')
+                lines.append(f"  >> {p['pick']} vs {p['opponent']}  [{tier_str}]")
+                lines.append(f"     Projected margin: {p['margin']:.1f} pts")
             lines.append("")
 
         if med_conf_ml:
-            lines.append("**MEDIUM CONFIDENCE WINNERS** (5-10 pt margin)")
+            lines.append("**SOLID WINNERS** (5-10 pt projected margin)")
             lines.append("")
             for p in med_conf_ml[:8]:
-                lines.append(f"  >> {p['pick']} vs {p['opponent']}")
+                tier_str = tier_labels.get(p.get('tier', 4), '?')
+                lines.append(f"  >> {p['pick']} vs {p['opponent']}  [{tier_str}]")
             lines.append("")
 
-        if value_underdogs:
-            lines.append("**HIGH-VALUE UNDERDOGS** (Line mispriced)")
+        if upset_picks:
+            lines.append("**PROJECTED UPSETS** (Model picks underdog to win)")
             lines.append("")
-            for p in sorted(value_underdogs, key=lambda x: -x['stars'])[:6]:
+            for p in upset_picks[:6]:
                 stars = "⭐" * p['stars']
-                lines.append(f"  >> {p['pick']} vs {p['opponent']} {stars}")
-                lines.append(f"     Edge: {p['edge']:.1f}%")
+                tier_str = tier_labels.get(p.get('tier', 4), '?')
+                lines.append(f"  >> {p['pick']} vs {p['opponent']} {stars}  [{tier_str}]")
+                lines.append(f"     Model win prob edge: {p['edge']:.1f}%")
             lines.append("")
 
-        if not high_conf_ml and not med_conf_ml and not value_underdogs:
+        if not high_conf_ml and not med_conf_ml and not upset_picks:
             lines.append("No moneyline picks today.")
             lines.append("")
 
         # =================================================================
-        # SECTION 2: SPREAD PICKS (Against the Spread)
+        # SECTION 2: SPREAD PICKS
         # =================================================================
         lines.append("")
         lines.append("SPREAD PICKS (Against the Spread)")
         lines.append("=" * 70)
         lines.append("")
 
-        # Sort by stars then edge
-        spread_picks.sort(key=lambda x: (-x['stars'], -x['edge']))
+        # Sort by confidence, then edge
+        spread_picks.sort(key=lambda x: (-x.get('pick_confidence', 0), -x['edge']))
 
         if spread_picks:
-            lines.append("**MODEL PREDICTIONS vs LINES**")
+            lines.append("**MODEL PROJECTIONS vs LINES**")
             lines.append("")
-            for p in spread_picks[:12]:
+            for p in spread_picks[:15]:
                 stars = "⭐" * p['stars']
-                lines.append(f"  >> {p['pick']} {stars}")
-                # Show prediction details
+                tier_str = tier_labels.get(p.get('tier', 4), '?')
+                lines.append(f"  >> {p['pick']} {stars}  [{tier_str}]")
                 if p.get('away_score') and p.get('home_score'):
-                    lines.append(f"     Predicted: {p['away_team'][:15]} {p['away_score']:.0f} - {p['home_team'][:15]} {p['home_score']:.0f}")
-                lines.append(f"     Model spread: {p['model_spread']:+.1f} | Line: {p['actual_line']:+.1f} | Edge: {p['edge']:.1f}")
+                    lines.append(f"     Projected: {p['away_team'][:15]} {p['away_score']:.0f} - {p['home_team'][:15]} {p['home_score']:.0f}")
+                lines.append(f"     Model: {p['model_spread']:+.1f} | Line: {p['actual_line']:+.1f} | Edge: {p['edge']:.1f}")
             lines.append("")
         else:
-            lines.append("No predictions with edge today.")
+            lines.append("No spread picks today.")
             lines.append("")
 
         # =================================================================
-        # SECTION 3: TOTALS PICKS (Over/Under)
+        # SECTION 3: TOTALS PICKS
         # =================================================================
         lines.append("")
         lines.append("TOTALS PICKS (Over/Under)")
         lines.append("=" * 70)
         lines.append("")
 
-        # Sort by stars then edge
-        totals_picks.sort(key=lambda x: (-x['stars'], -x['edge']))
+        totals_picks.sort(key=lambda x: (-x.get('pick_confidence', 0), -x['edge']))
 
         overs = [p for p in totals_picks if 'OVER' in p['pick']]
         unders = [p for p in totals_picks if 'UNDER' in p['pick']]
@@ -1584,39 +1731,25 @@ class NCAAAnalyzer:
         if overs:
             lines.append("**OVERS**")
             lines.append("")
-            for p in overs[:6]:
+            for p in overs[:8]:
                 stars = "⭐" * p['stars']
-                lines.append(f"  >> {p['pick']} ({p['game']}) {stars}")
+                tier_str = tier_labels.get(p.get('tier', 4), '?')
+                lines.append(f"  >> {p['pick']} ({p['game']}) {stars}  [{tier_str}]")
                 lines.append(f"     Model total: {p['predicted']:.1f} | Edge: {p['edge']:.1f} pts")
             lines.append("")
 
         if unders:
             lines.append("**UNDERS**")
             lines.append("")
-            for p in unders[:6]:
+            for p in unders[:8]:
                 stars = "⭐" * p['stars']
-                lines.append(f"  >> {p['pick']} ({p['game']}) {stars}")
+                tier_str = tier_labels.get(p.get('tier', 4), '?')
+                lines.append(f"  >> {p['pick']} ({p['game']}) {stars}  [{tier_str}]")
                 lines.append(f"     Model total: {p['predicted']:.1f} | Edge: {p['edge']:.1f} pts")
             lines.append("")
 
         if not overs and not unders:
-            lines.append("No high-value totals picks today.")
-            lines.append("")
-
-        # =================================================================
-        # SECTION 4: GAMES TO AVOID
-        # =================================================================
-        lines.append("")
-        lines.append("GAMES TO AVOID")
-        lines.append("=" * 70)
-        lines.append("")
-
-        if avoid_games[:8]:
-            for g in avoid_games[:8]:
-                lines.append(f"  -- {g['game']}: {g['reason']}")
-            lines.append("")
-        else:
-            lines.append("No games flagged to avoid.")
+            lines.append("No totals picks today.")
             lines.append("")
 
         # =================================================================
@@ -1626,10 +1759,11 @@ class NCAAAnalyzer:
         lines.append("-" * 70)
         lines.append("TODAY'S SUMMARY")
         lines.append("-" * 70)
-        lines.append(f"  Moneyline picks: {len([p for p in moneyline_picks if p['confidence'] in ['HIGH', 'MEDIUM']])}")
-        lines.append(f"  Spread picks: {len(spread_picks)}")
+        p5_spreads = len([p for p in spread_picks if p.get('tier', 4) <= 2])
+        lines.append(f"  Top picks: {min(15, len(all_ranked_picks))}")
+        lines.append(f"  Spread picks: {len(spread_picks)} ({p5_spreads} Power/Strong conf)")
+        lines.append(f"  Moneyline picks: {len(moneyline_picks)}")
         lines.append(f"  Totals picks: {len(totals_picks)}")
-        lines.append(f"  Games to avoid: {len(avoid_games)}")
         lines.append("-" * 70)
         lines.append("")
 

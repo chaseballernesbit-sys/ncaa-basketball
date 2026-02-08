@@ -25,3 +25,14 @@ kenpom/*.csv
 .idea/
 .vscode/
 *.swp
+
+# Shell scripts with API keys
+run_now.sh
+run_nba.sh
+run_analysis.sh
+
+# Local server (not needed for GitHub Pages)
+dashboard_server.py
+
+# Old dashboard location
+dashboard.html

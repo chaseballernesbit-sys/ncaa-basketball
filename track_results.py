@@ -6,6 +6,7 @@ Tracks picks against actual game results to measure model performance.
 
 import json
 import re
+import sys
 import requests
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -13,6 +14,10 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).parent
 DATA_DIR = PROJECT_DIR / "data"
 RESULTS_FILE = PROJECT_DIR / "results_history.json"
+
+# Use the project's proper team name normalization
+sys.path.insert(0, str(PROJECT_DIR))
+from team_mappings import normalize_team_name as canonical_name
 
 def fetch_espn_scores(date_str):
     """Fetch final scores from ESPN API for a given date (YYYYMMDD)"""
@@ -62,40 +67,50 @@ def fetch_espn_scores(date_str):
 
 
 def normalize_team_name(name):
-    """Normalize team name for matching"""
+    """Normalize team name for matching using canonical mappings."""
+    if not name:
+        return ""
+    # First try the proper canonical mapping (handles 250+ teams)
+    canon = canonical_name(name)
+    if canon:
+        return canon.lower().strip()
+    # Fallback: basic cleanup
     name = name.lower().strip()
-    # Remove common suffixes
     for suffix in [" basketball", " men's", " women's"]:
         name = name.replace(suffix, "")
-    # Handle common abbreviations
-    replacements = {
-        "st.": "state",
-        "st ": "state ",
-        "u of ": "",
-        "university of ": "",
-        "unc ": "north carolina ",
-    }
-    for old, new in replacements.items():
-        name = name.replace(old, new)
     return name.strip()
 
 
 def find_game_result(pick_home, pick_away, scores):
-    """Find matching game result from scores dict"""
+    """Find matching game result from scores dict using canonical team names."""
+    pick_home_canon = canonical_name(pick_home) or pick_home
+    pick_away_canon = canonical_name(pick_away) or pick_away
+
+    for game_key, result in scores.items():
+        home_canon = canonical_name(result["home"]["name"]) or result["home"]["name"]
+        away_canon = canonical_name(result["away"]["name"]) or result["away"]["name"]
+
+        # Exact canonical match
+        home_match = pick_home_canon.lower() == home_canon.lower()
+        away_match = pick_away_canon.lower() == away_canon.lower()
+
+        if home_match and away_match:
+            return result
+
+    # Fallback: partial substring matching on cleaned names
     pick_home_norm = normalize_team_name(pick_home)
     pick_away_norm = normalize_team_name(pick_away)
-    
+
     for game_key, result in scores.items():
         home_norm = normalize_team_name(result["home"]["name"])
         away_norm = normalize_team_name(result["away"]["name"])
-        
-        # Check if names match (partial match)
+
         home_match = pick_home_norm in home_norm or home_norm in pick_home_norm
         away_match = pick_away_norm in away_norm or away_norm in pick_away_norm
-        
+
         if home_match and away_match:
             return result
-    
+
     return None
 
 
@@ -203,24 +218,35 @@ def evaluate_picks(picks, scores, date_str):
     for pick in picks["spreads"]:
         team = pick["team"]
         spread = pick["spread"]
-        
+
         # Find the game - need to figure out home/away
         game_found = False
+        team_canon = (canonical_name(team) or team).lower()
+
         for game_key, game in scores.items():
             home_name = game["home"]["name"]
             away_name = game["away"]["name"]
-            
+
+            home_canon = (canonical_name(home_name) or home_name).lower()
+            away_canon = (canonical_name(away_name) or away_name).lower()
+
+            # Also try substring match as fallback
             team_norm = normalize_team_name(team)
             home_norm = normalize_team_name(home_name)
             away_norm = normalize_team_name(away_name)
-            
-            if team_norm in home_norm or home_norm in team_norm:
+
+            home_match = (team_canon == home_canon or
+                         team_norm in home_norm or home_norm in team_norm)
+            away_match = (team_canon == away_canon or
+                         team_norm in away_norm or away_norm in team_norm)
+
+            if home_match:
                 # Picked home team
                 actual_margin = game["margin"]  # home - away
                 covered = actual_margin + spread > 0
                 push = actual_margin + spread == 0
                 game_found = True
-            elif team_norm in away_norm or away_norm in team_norm:
+            elif away_match:
                 # Picked away team
                 actual_margin = -game["margin"]  # away - home
                 covered = actual_margin + spread > 0
@@ -295,20 +321,30 @@ def evaluate_picks(picks, scores, date_str):
     for pick in picks["moneylines"]:
         team = pick["team"]
         opponent = pick["opponent"]
-        
+
         # Find game
+        team_canon = (canonical_name(team) or team).lower()
+
         for game_key, game in scores.items():
             home_name = game["home"]["name"]
             away_name = game["away"]["name"]
-            
+
+            home_canon = (canonical_name(home_name) or home_name).lower()
+            away_canon = (canonical_name(away_name) or away_name).lower()
+
             team_norm = normalize_team_name(team)
             home_norm = normalize_team_name(home_name)
             away_norm = normalize_team_name(away_name)
-            
-            if team_norm in home_norm or home_norm in team_norm:
+
+            home_match = (team_canon == home_canon or
+                         team_norm in home_norm or home_norm in team_norm)
+            away_match = (team_canon == away_canon or
+                         team_norm in away_norm or away_norm in team_norm)
+
+            if home_match:
                 won = game["margin"] > 0  # home won
                 game_found = True
-            elif team_norm in away_norm or away_norm in team_norm:
+            elif away_match:
                 won = game["margin"] < 0  # away won
                 game_found = True
             else:

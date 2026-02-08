@@ -516,14 +516,14 @@ class NCAADataScraper:
                     # Luck and SOS
                     'luck': ['Luck', 'luck'],
                     'luck_rank': ['Luck_Rank'],
-                    'sos': ['SOS AdjEM', 'SOS', 'sos', 'SOS_NetRtg', 'Strength of Schedule'],
-                    'sos_rank': ['SOS_Rank'],
-                    'sos_oe': ['SOS_ORtg', 'OppO', 'SOS_O'],
-                    'sos_oe_rank': ['SOS_ORtg_Rank'],
-                    'sos_de': ['SOS_DRtg', 'OppD', 'SOS_D'],
-                    'sos_de_rank': ['SOS_DRtg_Rank'],
-                    'ncsos': ['NCSOS', 'NC SOS AdjEM', 'NC_SOS'],
-                    'ncsos_rank': ['NCSOS_Rank'],
+                    'sos': ['SOS AdjEM', 'SOS_AdjEM', 'SOS', 'sos', 'SOS_NetRtg', 'Strength of Schedule'],
+                    'sos_rank': ['SOS_Rank', 'SOS Rank'],
+                    'sos_oe': ['SOS_ORtg', 'SOS_OppO', 'SOS OppO', 'OppO', 'SOS_O'],
+                    'sos_oe_rank': ['SOS_ORtg_Rank', 'SOS_OppO_Rank', 'SOS OppO Rank'],
+                    'sos_de': ['SOS_DRtg', 'SOS_OppD', 'SOS OppD', 'OppD', 'SOS_D'],
+                    'sos_de_rank': ['SOS_DRtg_Rank', 'SOS_OppD_Rank', 'SOS OppD Rank'],
+                    'ncsos': ['NCSOS', 'NCSOS_AdjEM', 'NC SOS AdjEM', 'NC_SOS'],
+                    'ncsos_rank': ['NCSOS_Rank', 'NCSOS Rank'],
                     # Four Factors (if available)
                     'efg_o': ['eFG%', 'EFG_O', 'eFG_O', 'EFG%O'],
                     'efg_d': ['eFG%D', 'EFG_D', 'eFG_D', 'Opp eFG%'],
@@ -1501,10 +1501,27 @@ class NCAADataScraper:
         logger.info(f"Got ESPN stats for {len(teams)} teams")
         return teams
 
+    def _find_merged_key(self, merged: Dict, team_name: str) -> Optional[str]:
+        """Find the matching key in merged dict using normalized names."""
+        if team_name in merged:
+            return team_name
+        # Try normalizing the team name
+        normalized = normalize_team_name(team_name)
+        if normalized in merged:
+            return normalized
+        # Try matching against normalized versions of existing keys
+        for existing_key in merged:
+            if normalize_team_name(existing_key) == normalized:
+                return existing_key
+        return None
+
     def merge_all_team_data_with_kenpom(self, kenpom: Dict, barttorvik: Dict, espn: Dict, sports_ref: Dict) -> Dict[str, Dict]:
         """
         Merge team data from all sources with KenPom as highest priority.
         Priority: KenPom > BartTorvik > ESPN > Sports-Reference
+
+        Uses normalized team names to match across sources (e.g., ESPN's
+        "Nebraska Cornhuskers" matches KenPom's "Nebraska").
         """
         merged = {}
 
@@ -1515,41 +1532,48 @@ class NCAADataScraper:
 
         # 2. Add BartTorvik data (fill gaps or add if KenPom missing)
         for team, data in barttorvik.items():
-            if team not in merged:
+            match_key = self._find_merged_key(merged, team)
+            if match_key is None:
                 merged[team] = data.copy()
                 merged[team]["data_sources"] = ["barttorvik"]
             else:
                 # Add BartTorvik-specific fields that KenPom might not have
                 for key in ['torvik_rank', 'barthag', 'efg_o', 'efg_d', 'tov_o', 'tov_d', 'orb', 'drb', 'ftr', 'ftrd']:
-                    if data.get(key) is not None and merged[team].get(key) is None:
-                        merged[team][key] = data[key]
-                if "barttorvik" not in merged[team]["data_sources"]:
-                    merged[team]["data_sources"].append("barttorvik")
+                    if data.get(key) is not None and merged[match_key].get(key) is None:
+                        merged[match_key][key] = data[key]
+                if "barttorvik" not in merged[match_key]["data_sources"]:
+                    merged[match_key]["data_sources"].append("barttorvik")
 
         # 3. Add ESPN data (fill remaining gaps)
+        # This is critical: ESPN provides Four Factors (efg_o, tov_o, orb, etc.)
+        # that KenPom CSV doesn't include. We must match by normalized names.
         for team, data in espn.items():
-            if team not in merged:
+            match_key = self._find_merged_key(merged, team)
+            if match_key is None:
+                # New team not in KenPom/BartTorvik - use ESPN as primary
                 merged[team] = data.copy()
                 merged[team]["data_sources"] = ["espn"]
             else:
-                # Add ESPN-specific fields
+                # Fill gaps in existing KenPom/BartTorvik data with ESPN stats
                 for key, value in data.items():
-                    if key not in merged[team] or merged[team][key] is None:
-                        merged[team][key] = value
-                if "espn" not in merged[team].get("data_sources", []):
-                    merged[team]["data_sources"].append("espn")
+                    if key not in merged[match_key] or merged[match_key][key] is None:
+                        merged[match_key][key] = value
+                if "espn" not in merged[match_key].get("data_sources", []):
+                    merged[match_key]["data_sources"].append("espn")
 
         # 4. Add Sports-Reference data (supplementary)
         for team, data in sports_ref.items():
-            if team not in merged:
+            match_key = self._find_merged_key(merged, team)
+            if match_key is None:
                 merged[team] = {"data_sources": []}
+                match_key = team
 
             for key in ["srs", "sos", "ft_pct", "fg3_pct", "pts_per_game", "opp_pts_per_game", "games", "wins", "losses"]:
-                if data.get(key) is not None and merged[team].get(key) is None:
-                    merged[team][key] = data[key]
+                if data.get(key) is not None and merged[match_key].get(key) is None:
+                    merged[match_key][key] = data[key]
 
-            if "sports_reference" not in merged[team].get("data_sources", []):
-                merged[team]["data_sources"].append("sports_reference")
+            if "sports_reference" not in merged[match_key].get("data_sources", []):
+                merged[match_key]["data_sources"].append("sports_reference")
 
         return merged
 

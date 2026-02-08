@@ -58,45 +58,47 @@ STAR_THRESHOLDS = {
 # PREDICTION MODEL SETTINGS
 # =============================================================================
 
-# Minimum gap between model prediction and line to consider a pick
-MIN_MODEL_EDGE = 2.5  # Must have 2.5+ point difference from line
-
-# Maximum odds to bet (avoid heavy juice)
-MAX_FAVORITE_ODDS = -280  # Won't bet favorites heavier than -280
-MIN_UNDERDOG_ODDS = -200  # Won't lay more than -200 on spreads
-
-# Prediction confidence - require agreement across factors
-MIN_PREDICTION_CONFIDENCE = 0.65  # 65%+ confidence in outcome
+# Maximum odds to bet (avoid heavy juice / longshots not worth it)
+MAX_FAVORITE_ODDS = -400  # Won't bet favorites heavier than -400
+MAX_UNDERDOG_ODDS = 350   # Won't bet underdogs longer than +350
 
 # =============================================================================
-# SPREAD RISK MANAGEMENT (added based on results tracking)
+# CONFERENCE TIERS - drives pick confidence scoring
+# Higher tier = more trustworthy projections = picks weighted higher
 # =============================================================================
+
+CONFERENCE_TIER_1 = ['SEC', 'B10', 'Big Ten', 'B12', 'Big 12', 'ACC', 'BE', 'Big East']  # Power conferences
+CONFERENCE_TIER_2 = ['MWC', 'Mountain West', 'WCC', 'Amer', 'American', 'A10', 'Atlantic 10', 'MVC']
+CONFERENCE_TIER_3 = ['CAA', 'Ivy', 'Ivy League', 'Horz', 'Horizon', 'MAC', 'SB', 'Sun Belt',
+                     'BW', 'Big West', 'SC', 'Southern', 'BSky', 'Big Sky', 'OVC']
+# Everything else is Tier 4 (SWAC, MEAC, Southland, etc.)
+
+# Confidence multiplier by tier (applied to pick ranking)
+TIER_CONFIDENCE = {1: 1.0, 2: 0.75, 3: 0.55, 4: 0.35}
+
+# =============================================================================
+# PICK THRESHOLDS - adjusted by conference tier
+# =============================================================================
+
+# Base edge required (model vs line) - adjusted per tier
+SPREAD_EDGE_BY_TIER = {1: 1.5, 2: 2.5, 3: 3.5, 4: 5.0}
+TOTAL_EDGE_BY_TIER = {1: 5.0, 2: 6.0, 3: 7.0, 4: 9.0}
 
 # Large spreads are riskier - require more edge
-LARGE_SPREAD_THRESHOLD = 15.0  # Spreads over +/-15 are "large"
-LARGE_SPREAD_EXTRA_EDGE = 2.0  # Require 2 extra points of edge for large spreads
+LARGE_SPREAD_THRESHOLD = 15.0
+LARGE_SPREAD_EXTRA_EDGE = 2.0
 
 # Maximum spread to bet on (blowout risk too high beyond this)
-MAX_SPREAD_THRESHOLD = 22.0  # Don't bet spreads over +/-22
-
-# Power conference vs mid-major caution
-# Mid-major heavy underdogs often get blown out
-POWER_CONFERENCE_THRESHOLD = 10.0  # Extra caution when power conf is -10+ favorite
+MAX_SPREAD_THRESHOLD = 20.0
 
 # =============================================================================
-# TEAM QUALITY FILTER - Focus on quality teams only
+# TEAM QUALITY FILTER
 # =============================================================================
 
-# Use AdjEM (Adjusted Efficiency Margin) instead of rank
-# AdjEM > 0 = above average team, AdjEM < 0 = below average
-# Top 100 teams typically have AdjEM > +5
-
-MIN_ADJEM_TO_BET = -5.0  # Only bet on teams with AdjEM > -5 (filters out bottom ~100)
-MIN_ADJEM_FOR_TOTALS = 0.0  # At least one team should be above average for totals
-
-# Alternatively, filter by rank if available (1-100)
-MAX_RANK_TO_BET = 100  # Only bet teams ranked 1-100 (when rank data available)
-ALLOW_FADE_UNRANKED = True  # Can bet ranked team vs unranked opponent
+MIN_ADJEM_TO_BET = -5.0   # Only bet on teams with AdjEM > -5
+MIN_ADJEM_FOR_TOTALS = 0.0
+MAX_RANK_TO_BET = 100
+ALLOW_FADE_UNRANKED = True
 
 # Unit allocation by star rating
 UNITS_BY_STARS = {

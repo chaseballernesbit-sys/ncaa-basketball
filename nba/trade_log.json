@@ -1,0 +1,4 @@
+{
+    "_instructions": "Add trades here as they happen. Set games_since to 0 on trade day, increment daily.",
+    "trades": []
+}
