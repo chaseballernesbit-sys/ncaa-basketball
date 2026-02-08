@@ -462,6 +462,15 @@ def compute_rolling_stats(picks: list, days: int, sport: str) -> dict:
     return {"wins": w, "losses": l}
 
 
+def _odds_to_profit(odds) -> float:
+    """Convert American odds to profit on a 1u bet. Falls back to -110 (0.91u)."""
+    if odds and odds > 0:
+        return odds / 100.0
+    elif odds and odds < 0:
+        return 100.0 / abs(odds)
+    return 0.91
+
+
 def compute_cumulative_profit(nba_picks: list, nhl_picks: list) -> list:
     """Compute daily cumulative profit in units for both sports."""
     daily = defaultdict(lambda: {"nba": 0.0, "nhl": 0.0})
@@ -470,20 +479,14 @@ def compute_cumulative_profit(nba_picks: list, nhl_picks: list) -> list:
         d = p.get("date", "")
         if not d:
             continue
-        # Spread: -110 standard
+        # Spread: use actual odds if available, else -110
         if p.get("spread_correct") is True:
-            daily[d]["nba"] += 0.91
+            daily[d]["nba"] += _odds_to_profit(p.get("spread_odds"))
         elif p.get("spread_correct") is False:
             daily[d]["nba"] -= 1.0
-        # ML: use actual odds if available
+        # ML
         if p.get("ml_correct") is True:
-            odds = p.get("ml_odds")
-            if odds and odds > 0:
-                daily[d]["nba"] += odds / 100.0
-            elif odds and odds < 0:
-                daily[d]["nba"] += 100.0 / abs(odds)
-            else:
-                daily[d]["nba"] += 0.91
+            daily[d]["nba"] += _odds_to_profit(p.get("ml_odds"))
         elif p.get("ml_correct") is False:
             daily[d]["nba"] -= 1.0
 
@@ -491,9 +494,10 @@ def compute_cumulative_profit(nba_picks: list, nhl_picks: list) -> list:
         d = p.get("date", "")
         if not d:
             continue
+        odds_keys = {"ml": "ml_odds", "total": "total_odds", "pl": "pl_odds"}
         for bet, field in [("ml", "ml_correct"), ("total", "total_correct"), ("pl", "pl_correct")]:
             if p.get(field) is True:
-                daily[d]["nhl"] += 0.91
+                daily[d]["nhl"] += _odds_to_profit(p.get(odds_keys[bet]))
             elif p.get(field) is False:
                 daily[d]["nhl"] -= 1.0
 

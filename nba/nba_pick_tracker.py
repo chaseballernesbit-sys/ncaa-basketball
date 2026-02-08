@@ -113,8 +113,8 @@ def save_today_picks(analyses: list, games: list):
             continue
 
         # Top-play tagging: quality thresholds per bet type
-        top_play_spread = has_spread and sv.get("hit_pct", 0) >= 59
-        top_play_ml = has_ml and ml.get("hit_pct", 0) >= 59
+        top_play_spread = bool(has_spread and sv.get("hit_pct", 0) >= 59)
+        top_play_ml = bool(has_ml and ml.get("hit_pct", 0) >= 59)
 
         # Only save games with at least one top pick
         if not (top_play_spread or top_play_ml):
@@ -130,6 +130,13 @@ def save_today_picks(analyses: list, games: list):
             ml_team = home
             ml_odds = ml.get("home_ml")
 
+        # Determine spread odds based on pick direction
+        spread_odds = None
+        if pick_team == "AWAY":
+            spread_odds = sv.get("away_spread_odds")
+        elif pick_team == "HOME":
+            spread_odds = sv.get("home_spread_odds")
+
         pick = {
             "game_id": game_id,
             "date": today,
@@ -137,6 +144,7 @@ def save_today_picks(analyses: list, games: list):
             "home_team": home,
             "spread_pick": pick_team if has_spread else None,
             "spread_line": sv.get("actual_spread"),
+            "spread_odds": spread_odds,
             "spread_edge": round(sv.get("value_points", 0), 1) if has_spread else None,
             "spread_grade": sv.get("grade", "") if has_spread else None,
             "spread_hit_pct": round(sv.get("hit_pct", 0)) if has_spread else None,

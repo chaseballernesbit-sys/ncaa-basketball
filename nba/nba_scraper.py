@@ -528,19 +528,28 @@ class NBADataScraper:
             away_name = normalize_team_name(odds_game.get("away_team", ""))
             home_name = normalize_team_name(odds_game.get("home_team", ""))
 
-            consensus = {"spread": None, "total": None, "away_ml": None, "home_ml": None}
+            consensus = {"spread": None, "total": None, "away_ml": None, "home_ml": None,
+                         "away_spread_odds": None, "home_spread_odds": None}
             all_spreads = []
             all_totals = []
             all_away_ml = []
             all_home_ml = []
+            all_away_spread_odds = []
+            all_home_spread_odds = []
 
             for book in odds_game.get("bookmakers", []):
                 for market in book.get("markets", []):
                     outcomes = market.get("outcomes", [])
                     if market["key"] == "spreads":
                         for o in outcomes:
-                            if normalize_team_name(o.get("name", "")) == away_name:
+                            name = normalize_team_name(o.get("name", ""))
+                            if name == away_name:
                                 all_spreads.append(o.get("point", 0))
+                                if o.get("price") is not None:
+                                    all_away_spread_odds.append(o["price"])
+                            elif name == home_name:
+                                if o.get("price") is not None:
+                                    all_home_spread_odds.append(o["price"])
                     elif market["key"] == "totals":
                         for o in outcomes:
                             if o.get("name") == "Over":
@@ -561,6 +570,10 @@ class NBADataScraper:
                 consensus["away_ml"] = round(sum(all_away_ml) / len(all_away_ml))
             if all_home_ml:
                 consensus["home_ml"] = round(sum(all_home_ml) / len(all_home_ml))
+            if all_away_spread_odds:
+                consensus["away_spread_odds"] = round(sum(all_away_spread_odds) / len(all_away_spread_odds))
+            if all_home_spread_odds:
+                consensus["home_spread_odds"] = round(sum(all_home_spread_odds) / len(all_home_spread_odds))
 
             # Match to our game list
             for game in self.games:

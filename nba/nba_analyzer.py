@@ -822,6 +822,8 @@ class NBAAnalyzer:
         actual_total = odds.get("total")
         away_ml = odds.get("away_ml")
         home_ml = odds.get("home_ml")
+        away_spread_odds = odds.get("away_spread_odds")
+        home_spread_odds = odds.get("home_spread_odds")
 
         # Core projections
         expected = self.calculate_expected_score(away_name, home_name, neutral)
@@ -886,6 +888,8 @@ class NBAAnalyzer:
 
         # Value calculations
         spread_value = self.calculate_spread_value(adjusted_spread, actual_spread)
+        spread_value["away_spread_odds"] = away_spread_odds
+        spread_value["home_spread_odds"] = home_spread_odds
         total_value = self.calculate_total_value(adjusted_total, actual_total)
         ml_value = self.calculate_moneyline_value(adjusted_spread, away_ml, home_ml)
 
