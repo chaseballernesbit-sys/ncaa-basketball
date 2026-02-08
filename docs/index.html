@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sports Picks Dashboard</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    padding: 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Header */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 0;
+    border-bottom: 1px solid #30363d;
+    margin-bottom: 24px;
+}
+header h1 { font-size: 22px; font-weight: 600; color: #f0f6fc; }
+header .generated { font-size: 13px; color: #8b949e; }
+
+/* Sections */
+.section { margin-bottom: 28px; }
+.section h2 {
+    font-size: 17px; font-weight: 600; color: #f0f6fc;
+    margin-bottom: 12px; padding-bottom: 8px;
+    border-bottom: 1px solid #21262d;
+}
+.section-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #21262d;
+}
+.section-header h2 { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+.record-subtitle { font-weight: 400; color: #8b949e; font-size: 13px; }
+
+/* Lock badge */
+.lock-status {
+    margin-top: 10px; padding-top: 8px; border-top: 1px solid #21262d;
+    text-align: center;
+}
+.lock-badge {
+    display: inline-block; background: #1a3a1a; color: #3fb950;
+    border: 1px solid #238636; border-radius: 6px;
+    padding: 4px 14px; font-size: 12px; font-weight: 600;
+}
+
+/* Cards */
+.cards-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+@media (max-width: 700px) { .cards-row { grid-template-columns: 1fr; } }
+.card {
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 8px; padding: 16px;
+}
+.card h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #f0f6fc; }
+.game-count { font-weight: 400; color: #8b949e; font-size: 13px; }
+.record-overall { font-weight: 400; color: #58a6ff; font-size: 14px; margin-left: 8px; }
+
+/* Picks list */
+.picks-list { display: flex; flex-direction: column; gap: 8px; }
+.game-row {
+    background: #0d1117; border-radius: 6px; padding: 10px 12px;
+}
+.game-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px;
+}
+.matchup { font-weight: 600; font-size: 13px; color: #c9d1d9; }
+.score { font-size: 12px; color: #8b949e; }
+.game-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Pick chips */
+.pick-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #21262d; border-radius: 4px; padding: 3px 8px;
+    font-size: 12px; color: #c9d1d9; white-space: nowrap;
+}
+.pick-detail {
+    color: #8b949e; font-size: 11px; text-transform: uppercase;
+    margin-left: 2px;
+}
+.grade {
+    background: #30363d; border-radius: 3px; padding: 1px 4px;
+    font-size: 10px; font-weight: 600; color: #58a6ff; margin-left: 3px;
+}
+
+.no-picks {
+    color: #484f58; font-style: italic; font-size: 13px; padding: 16px 0;
+}
+
+/* Records */
+.record-breakdown { display: flex; flex-direction: column; gap: 4px; }
+.record-row { font-size: 13px; color: #c9d1d9; }
+.record-label { color: #8b949e; display: inline-block; width: 80px; }
+.rolling-form { margin-top: 8px; padding-top: 6px; border-top: 1px solid #21262d; }
+
+/* Colors */
+.win { color: #3fb950; }
+.loss { color: #f85149; }
+.pending { color: #d29922; }
+.stars { color: #d29922; font-size: 12px; letter-spacing: -1px; }
+
+/* Tier tables */
+.tier-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.tier-table th {
+    text-align: left; color: #8b949e; font-weight: 500;
+    padding: 4px 8px; border-bottom: 1px solid #30363d;
+}
+.tier-table td {
+    padding: 4px 8px; color: #c9d1d9; border-bottom: 1px solid #21262d;
+}
+
+/* Profit chart */
+.chart-container {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+    padding: 12px; position: relative;
+}
+.profit-chart { width: 100%; height: auto; }
+.chart-label { fill: #8b949e; font-size: 11px; font-family: inherit; }
+.chart-grid { stroke: #21262d; stroke-width: 1; }
+.chart-line { vector-effect: non-scaling-stroke; }
+.chart-legend {
+    display: flex; gap: 16px; margin-bottom: 8px; font-size: 12px; color: #8b949e;
+}
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-dot {
+    width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+}
+.chart-tooltip {
+    display: none; position: absolute; background: #21262d;
+    border: 1px solid #484f58; border-radius: 6px; padding: 8px 12px;
+    font-size: 12px; color: #e6edf3; pointer-events: none; z-index: 10;
+    white-space: nowrap;
+}
+
+/* Tabs */
+.tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.tab {
+    background: #21262d; color: #8b949e; border: 1px solid #30363d;
+    border-radius: 6px; padding: 6px 16px; cursor: pointer;
+    font-size: 13px; font-family: inherit;
+}
+.tab.active { background: #161b22; color: #f0f6fc; border-color: #58a6ff; }
+.tab:hover { color: #f0f6fc; }
+.tab-content.hidden { display: none; }
+
+/* Day blocks */
+.day-block {
+    background: #161b22; border: 1px solid #30363d;
+    border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
+}
+.day-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #21262d;
+}
+.day-date { font-weight: 600; font-size: 14px; color: #f0f6fc; min-width: 70px; }
+.sport-badge {
+    font-size: 11px; font-weight: 600; padding: 2px 8px;
+    border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.sport-badge.nba { background: #1a3a1a; color: #3fb950; }
+.sport-badge.nhl { background: #172240; color: #58a6ff; }
+.day-record { font-size: 13px; margin-left: auto; }
+.day-picks { display: flex; flex-direction: column; gap: 6px; }
+</style>
+</head>
+<body>
+<header>
+    <h1>Sports Picks Dashboard</h1>
+    <span class="generated">Generated Feb 08, 2026 11:50 AM</span>
+</header>
+
+<div class="section">
+<div class="section-header"><h2>Today's Picks &mdash; Feb 08</h2></div>
+<div class="cards-row">
+<div class="card" id="card-nba">
+<h3>NBA <span class="game-count">2 top picks</span></h3>
+<div class="picks-list">
+<div class="game-row"><div class="game-header"><span class="matchup">Knicks @ Celtics</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> Celtics -3.8 <span class="pick-detail">SPREAD</span><span class="grade">A</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> Celtics ML (-174) <span class="pick-detail">ML</span><span class="grade">A+</span></span></div></div><div class="game-row"><div class="game-header"><span class="matchup">Pacers @ Raptors</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> Raptors -9.1 <span class="pick-detail">SPREAD</span><span class="grade">A</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> Raptors ML (-374) <span class="pick-detail">ML</span><span class="grade">A+</span></span></div></div></div>
+<div class="lock-status locked"><span class="lock-badge">Locked</span></div>
+</div>
+<div class="card" id="card-nhl">
+<h3>NHL <span class="game-count">0 top picks</span></h3>
+<div class="no-picks">No picks yet</div>
+</div>
+</div>
+</div>
+
+<div class="section">
+<h2>Record Summary <span class="record-subtitle">(top picks only)</span></h2>
+<div class="cards-row">
+<div class="card">
+<h3>NBA <span class="record-overall">0-0</span></h3>
+<div class="record-breakdown">
+<div class="rolling-form">
+<div class="record-row"><span class="record-label">Last 7d:</span> <span class="pending">--</span></div>
+<div class="record-row"><span class="record-label">Last 14d:</span> <span class="pending">--</span></div>
+</div>
+</div>
+</div>
+<div class="card">
+<h3>NHL <span class="record-overall">18-3 (86%)</span></h3>
+<div class="record-breakdown">
+<div class="record-row"><span class="record-label">ML:</span> 11-2 (85%)</div>
+<div class="record-row"><span class="record-label">Total:</span> 3-1 (75%)</div>
+<div class="record-row"><span class="record-label">Puck Line:</span> 4-0 (100%)</div>
+<div class="rolling-form">
+<div class="record-row"><span class="record-label">Last 7d:</span> <span class="win">18-3 (86%)</span></div>
+<div class="record-row"><span class="record-label">Last 14d:</span> <span class="win">18-3 (86%)</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="section">
+<h2>Cumulative Profit <span class="record-subtitle">(1u per pick, spreads/totals at -110)</span></h2>
+<div class="chart-container">
+<div class="chart-legend"><span class="legend-item"><span class="legend-dot" style="background:#3fb950"></span>NBA</span><span class="legend-item"><span class="legend-dot" style="background:#58a6ff"></span>NHL</span><span class="legend-item"><span class="legend-dot" style="background:#e6edf3"></span>Combined</span></div>
+<svg viewBox="0 0 800 200" class="profit-chart" xmlns="http://www.w3.org/2000/svg">
+  <rect x="50" y="15" width="730" height="155" fill="#161b22" rx="4"/>
+  <text x="42" y="174.0" class="chart-label" text-anchor="end">+0</text><text x="42" y="143.0" class="chart-label" text-anchor="end">+3</text><line x1="50" y1="139.0" x2="780" y2="139.0" class="chart-grid"/><text x="42" y="112.0" class="chart-label" text-anchor="end">+5</text><line x1="50" y1="108.0" x2="780" y2="108.0" class="chart-grid"/><text x="42" y="81.0" class="chart-label" text-anchor="end">+8</text><line x1="50" y1="77.0" x2="780" y2="77.0" class="chart-grid"/><text x="42" y="50.0" class="chart-label" text-anchor="end">+11</text><line x1="50" y1="46.0" x2="780" y2="46.0" class="chart-grid"/><text x="42" y="19.0" class="chart-label" text-anchor="end">+13</text>
+  <text x="50.0" y="195" class="chart-label" text-anchor="middle">Feb 03</text><text x="415.0" y="195" class="chart-label" text-anchor="middle">Feb 04</text><text x="780.0" y="195" class="chart-label" text-anchor="middle">Feb 05</text>
+  <line x1="50" y1="170.0" x2="780" y2="170.0" stroke="#484f58" stroke-width="1" stroke-dasharray="4,3"/>
+  <polyline points="50.0,170.0 415.0,170.0 780.0,170.0" fill="none" stroke="#3fb950" stroke-width="2" class="chart-line"/>
+  <polyline points="50.0,140.5 415.0,88.8 780.0,15.0" fill="none" stroke="#58a6ff" stroke-width="2" class="chart-line"/>
+  <polyline points="50.0,140.5 415.0,88.8 780.0,15.0" fill="none" stroke="#e6edf3" stroke-width="2" class="chart-line"/>
+  <rect x="-71.7" y="15" width="243.3" height="155" fill="transparent" class="hover-rect" data-idx="0" data-date="2026-02-03" data-nba="0.0" data-nhl="2.55" data-total="2.55"/><rect x="293.3" y="15" width="243.3" height="155" fill="transparent" class="hover-rect" data-idx="1" data-date="2026-02-04" data-nba="0.0" data-nhl="7.01" data-total="7.01"/><rect x="658.3" y="15" width="243.3" height="155" fill="transparent" class="hover-rect" data-idx="2" data-date="2026-02-05" data-nba="0.0" data-nhl="13.38" data-total="13.38"/>
+</svg><div class="chart-tooltip" id="chart-tooltip"></div>
+</div>
+</div>
+
+<div class="section">
+<h2>Confidence Tier Breakdown</h2>
+<div class="cards-row">
+<div class="card">
+<h3>NBA by Grade</h3>
+<table class="tier-table"><thead><tr><th>Grade</th><th>Record</th><th>Win%</th></tr></thead><tbody>
+<tr><td>Ungraded</td><td>41-18</td><td class="win">69%</td></tr>
+</tbody></table>
+</div>
+<div class="card">
+<h3>NHL by Stars</h3>
+<table class="tier-table"><thead><tr><th>Rating</th><th>Record</th><th>Win%</th></tr></thead><tbody>
+<tr><td><span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></td><td>10-2</td><td class="win">83%</td></tr>
+<tr><td><span class="stars">&#9733;&#9733;&#9733;&#9733;</span></td><td>8-1</td><td class="win">89%</td></tr>
+</tbody></table>
+</div>
+</div>
+</div>
+
+<div class="section">
+<h2>Day-by-Day Results</h2>
+<div class="tabs">
+<button class="tab active" onclick="showTab('all')">All</button>
+<button class="tab" onclick="showTab('nba')">NBA</button>
+<button class="tab" onclick="showTab('nhl')">NHL</button>
+</div>
+<div class="tab-content" id="tab-all">
+<div class="day-block">
+<div class="day-header">
+    <span class="day-date">Today</span>
+    <span class="sport-badge nba">NBA</span>
+    <span class="day-record"><span class="pending">pending</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">Knicks @ Celtics</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> Celtics -3.8 <span class="pick-detail">SPREAD</span><span class="grade">A</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> Celtics ML (-174) <span class="pick-detail">ML</span><span class="grade">A+</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Heat @ Wizards</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> Wizards +12.2 <span class="pick-detail">SPREAD</span><span class="grade">B-</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Pacers @ Raptors</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> Raptors -9.1 <span class="pick-detail">SPREAD</span><span class="grade">A</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> Raptors ML (-374) <span class="pick-detail">ML</span><span class="grade">A+</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Clippers @ Timberwolves</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> Timberwolves -9.0 <span class="pick-detail">SPREAD</span><span class="grade">B-</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Yesterday</span>
+    <span class="sport-badge nba">NBA</span>
+    <span class="day-record"><span class="win">11-3 (79%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">Wizards @ Nets</span><span class="score">113-127</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Nets -8.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Nets ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Rockets @ Thunder</span><span class="score">112-106</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Thunder ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Mavericks @ Spurs</span><span class="score">125-138</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Mavericks +11.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Spurs ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Jazz @ Magic</span><span class="score">117-120</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Magic ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Hornets @ Hawks</span><span class="score">126-119</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Hornets -1.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Nuggets @ Bulls</span><span class="score">136-120</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Bulls +9.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Warriors @ Lakers</span><span class="score">99-105</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Lakers -1.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Lakers ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">76ers @ Suns</span><span class="score">109-103</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> 76ers +2.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Grizzlies @ Blazers</span><span class="score">115-122</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Grizzlies +9.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Cavaliers @ Kings</span><span class="score">132-126</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Kings +12.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Cavaliers ML  <span class="pick-detail">ML</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 06</span>
+    <span class="sport-badge nba">NBA</span>
+    <span class="day-record"><span class="">6-5 (55%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">Heat @ Celtics</span><span class="score">96-98</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Celtics -5.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Celtics ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Knicks @ Pistons</span><span class="score">80-118</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Pistons -5.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Pistons ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Pacers @ Bucks</span><span class="score">99-105</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Bucks +1.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Bucks ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Pelicans @ Timberwolves</span><span class="score">119-115</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Timberwolves -8.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="loss">&#10007;</span> Timberwolves ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Grizzlies @ Blazers</span><span class="score">115-135</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Grizzlies +8.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Clippers @ Kings</span><span class="score">114-111</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Clippers -3.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Clippers ML  <span class="pick-detail">ML</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 05</span>
+    <span class="sport-badge nba">NBA</span>
+    <span class="day-record"><span class="win">9-3 (75%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">Wizards @ Pistons</span><span class="score">126-117</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Pistons ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Nets @ Magic</span><span class="score">98-118</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Magic ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Jazz @ Hawks</span><span class="score">119-121</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Hawks ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Bulls @ Raptors</span><span class="score">107-123</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Raptors -7.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Raptors ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Hornets @ Rockets</span><span class="score">109-99</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Hornets +4.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Spurs @ Mavericks</span><span class="score">135-123</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Mavericks +7.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Spurs ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Warriors @ Suns</span><span class="score">101-97</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Warriors +5.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="loss">&#10007;</span> Suns ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">76ers @ Lakers</span><span class="score">115-119</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Lakers -2.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Lakers ML  <span class="pick-detail">ML</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 05</span>
+    <span class="sport-badge nhl">NHL</span>
+    <span class="day-record"><span class="win">7-0 (100%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">PIT @ BUF</span><span class="score">5-2</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> OVER 6 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="win">&#10003;</span> PIT +1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">NYI @ NJD</span><span class="score">3-1</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> UNDER 5.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="win">&#10003;</span> NYI +1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">CAR @ NYR</span><span class="score">2-0</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> CAR ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">NSH @ WSH</span><span class="score">2-4</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> WSH ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">FLA @ TBL</span><span class="score">1-6</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> TBL ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 04</span>
+    <span class="sport-badge nba">NBA</span>
+    <span class="day-record"><span class="win">7-2 (78%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">Nuggets @ Knicks</span><span class="score">127-134</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Knicks -4.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Knicks ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Timberwolves @ Raptors</span><span class="score">128-126</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Raptors +2.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Celtics @ Rockets</span><span class="score">114-93</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Celtics +8.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Pelicans @ Bucks</span><span class="score">137-141</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Bucks +4.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Thunder @ Spurs</span><span class="score">106-116</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Thunder +9.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Spurs ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Grizzlies @ Kings</span><span class="score">129-125</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Grizzlies +2.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Cavaliers @ Clippers</span><span class="score">124-91</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Clippers +2.5 <span class="pick-detail">SPREAD</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 04</span>
+    <span class="sport-badge nhl">NHL</span>
+    <span class="day-record"><span class="win">6-1 (86%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">BOS @ FLA</span><span class="score">4-5</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> FLA ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">CHI @ CBJ</span><span class="score">0-4</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> CBJ ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">MTL @ WPG</span><span class="score">5-1</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> WPG ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">MIN @ NSH</span><span class="score">6-5</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> NSH +1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">DET @ UTA</span><span class="score">1-4</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> UTA ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">STL @ DAL</span><span class="score">4-5</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> DAL ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">EDM @ CGY</span><span class="score">3-4</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> CGY ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 03</span>
+    <span class="sport-badge nba">NBA</span>
+    <span class="day-record"><span class="win">8-5 (62%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">Nuggets @ Pistons</span><span class="score">121-124</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Pistons -5.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Pistons ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Jazz @ Pacers</span><span class="score">131-122</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Pacers +2.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Knicks @ Wizards</span><span class="score">132-101</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Knicks ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Lakers @ Nets</span><span class="score">125-109</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Nets +7.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Lakers ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Hawks @ Heat</span><span class="score">127-115</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Hawks +1.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Celtics @ Mavericks</span><span class="score">110-100</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Celtics ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Bulls @ Bucks</span><span class="score">115-131</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Bucks +1.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Magic @ Thunder</span><span class="score">92-128</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Magic +11.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Thunder ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">76ers @ Warriors</span><span class="score">113-94</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> 76ers +4.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Suns @ Blazers</span><span class="score">130-125</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Blazers +2.5 <span class="pick-detail">SPREAD</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 03</span>
+    <span class="sport-badge nhl">NHL</span>
+    <span class="day-record"><span class="win">5-2 (71%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">CBJ @ NJD</span><span class="score">3-0</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> CBJ ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="loss">&#10007;</span> OVER 5.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="win">&#10003;</span> NJD +1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">OTT @ CAR</span><span class="score">3-4</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> CAR ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span> <span class="pick-chip"><span class="win">&#10003;</span> OVER 6 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">BUF @ TBL</span><span class="score">3-4</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> TBL ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">TOR @ EDM</span><span class="score">4-2</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> EDM ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div></div>
+</div></div>
+<div class="tab-content hidden" id="tab-nba">
+<div class="day-block">
+<div class="day-header">
+    <span class="day-date">Today</span>
+    <span class="sport-badge nba">NBA</span>
+    <span class="day-record"><span class="pending">pending</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">Knicks @ Celtics</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> Celtics -3.8 <span class="pick-detail">SPREAD</span><span class="grade">A</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> Celtics ML (-174) <span class="pick-detail">ML</span><span class="grade">A+</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Heat @ Wizards</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> Wizards +12.2 <span class="pick-detail">SPREAD</span><span class="grade">B-</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Pacers @ Raptors</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> Raptors -9.1 <span class="pick-detail">SPREAD</span><span class="grade">A</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> Raptors ML (-374) <span class="pick-detail">ML</span><span class="grade">A+</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Clippers @ Timberwolves</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> Timberwolves -9.0 <span class="pick-detail">SPREAD</span><span class="grade">B-</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Yesterday</span>
+    <span class="sport-badge nba">NBA</span>
+    <span class="day-record"><span class="win">11-3 (79%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">Wizards @ Nets</span><span class="score">113-127</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Nets -8.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Nets ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Rockets @ Thunder</span><span class="score">112-106</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Thunder ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Mavericks @ Spurs</span><span class="score">125-138</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Mavericks +11.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Spurs ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Jazz @ Magic</span><span class="score">117-120</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Magic ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Hornets @ Hawks</span><span class="score">126-119</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Hornets -1.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Nuggets @ Bulls</span><span class="score">136-120</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Bulls +9.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Warriors @ Lakers</span><span class="score">99-105</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Lakers -1.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Lakers ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">76ers @ Suns</span><span class="score">109-103</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> 76ers +2.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Grizzlies @ Blazers</span><span class="score">115-122</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Grizzlies +9.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Cavaliers @ Kings</span><span class="score">132-126</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Kings +12.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Cavaliers ML  <span class="pick-detail">ML</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 06</span>
+    <span class="sport-badge nba">NBA</span>
+    <span class="day-record"><span class="">6-5 (55%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">Heat @ Celtics</span><span class="score">96-98</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Celtics -5.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Celtics ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Knicks @ Pistons</span><span class="score">80-118</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Pistons -5.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Pistons ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Pacers @ Bucks</span><span class="score">99-105</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Bucks +1.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Bucks ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Pelicans @ Timberwolves</span><span class="score">119-115</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Timberwolves -8.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="loss">&#10007;</span> Timberwolves ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Grizzlies @ Blazers</span><span class="score">115-135</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Grizzlies +8.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Clippers @ Kings</span><span class="score">114-111</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Clippers -3.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Clippers ML  <span class="pick-detail">ML</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 05</span>
+    <span class="sport-badge nba">NBA</span>
+    <span class="day-record"><span class="win">9-3 (75%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">Wizards @ Pistons</span><span class="score">126-117</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Pistons ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Nets @ Magic</span><span class="score">98-118</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Magic ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Jazz @ Hawks</span><span class="score">119-121</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Hawks ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Bulls @ Raptors</span><span class="score">107-123</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Raptors -7.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Raptors ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Hornets @ Rockets</span><span class="score">109-99</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Hornets +4.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Spurs @ Mavericks</span><span class="score">135-123</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Mavericks +7.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Spurs ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Warriors @ Suns</span><span class="score">101-97</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Warriors +5.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="loss">&#10007;</span> Suns ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">76ers @ Lakers</span><span class="score">115-119</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Lakers -2.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Lakers ML  <span class="pick-detail">ML</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 04</span>
+    <span class="sport-badge nba">NBA</span>
+    <span class="day-record"><span class="win">7-2 (78%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">Nuggets @ Knicks</span><span class="score">127-134</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Knicks -4.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Knicks ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Timberwolves @ Raptors</span><span class="score">128-126</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Raptors +2.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Celtics @ Rockets</span><span class="score">114-93</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Celtics +8.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Pelicans @ Bucks</span><span class="score">137-141</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Bucks +4.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Thunder @ Spurs</span><span class="score">106-116</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Thunder +9.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Spurs ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Grizzlies @ Kings</span><span class="score">129-125</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Grizzlies +2.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Cavaliers @ Clippers</span><span class="score">124-91</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Clippers +2.5 <span class="pick-detail">SPREAD</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 03</span>
+    <span class="sport-badge nba">NBA</span>
+    <span class="day-record"><span class="win">8-5 (62%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">Nuggets @ Pistons</span><span class="score">121-124</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Pistons -5.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Pistons ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Jazz @ Pacers</span><span class="score">131-122</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Pacers +2.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Knicks @ Wizards</span><span class="score">132-101</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Knicks ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Lakers @ Nets</span><span class="score">125-109</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Nets +7.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Lakers ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Hawks @ Heat</span><span class="score">127-115</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Hawks +1.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Celtics @ Mavericks</span><span class="score">110-100</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Celtics ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Bulls @ Bucks</span><span class="score">115-131</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> Bucks +1.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Magic @ Thunder</span><span class="score">92-128</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Magic +11.5 <span class="pick-detail">SPREAD</span></span> <span class="pick-chip"><span class="win">&#10003;</span> Thunder ML  <span class="pick-detail">ML</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">76ers @ Warriors</span><span class="score">113-94</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> 76ers +4.5 <span class="pick-detail">SPREAD</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">Suns @ Blazers</span><span class="score">130-125</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> Blazers +2.5 <span class="pick-detail">SPREAD</span></span></div></div></div>
+</div></div>
+<div class="tab-content hidden" id="tab-nhl">
+<div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 05</span>
+    <span class="sport-badge nhl">NHL</span>
+    <span class="day-record"><span class="win">7-0 (100%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">PIT @ BUF</span><span class="score">5-2</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> OVER 6 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="win">&#10003;</span> PIT +1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">NYI @ NJD</span><span class="score">3-1</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> UNDER 5.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="win">&#10003;</span> NYI +1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">CAR @ NYR</span><span class="score">2-0</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> CAR ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">NSH @ WSH</span><span class="score">2-4</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> WSH ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">FLA @ TBL</span><span class="score">1-6</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> TBL ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 04</span>
+    <span class="sport-badge nhl">NHL</span>
+    <span class="day-record"><span class="win">6-1 (86%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">BOS @ FLA</span><span class="score">4-5</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> FLA ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">CHI @ CBJ</span><span class="score">0-4</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> CBJ ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">MTL @ WPG</span><span class="score">5-1</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> WPG ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">MIN @ NSH</span><span class="score">6-5</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> NSH +1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">DET @ UTA</span><span class="score">1-4</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> UTA ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">STL @ DAL</span><span class="score">4-5</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> DAL ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">EDM @ CGY</span><span class="score">3-4</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> CGY ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div></div>
+</div><div class="day-block">
+<div class="day-header">
+    <span class="day-date">Feb 03</span>
+    <span class="sport-badge nhl">NHL</span>
+    <span class="day-record"><span class="win">5-2 (71%)</span></span>
+</div>
+<div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">CBJ @ NJD</span><span class="score">3-0</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> CBJ ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="loss">&#10007;</span> OVER 5.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="win">&#10003;</span> NJD +1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">OTT @ CAR</span><span class="score">3-4</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> CAR ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span> <span class="pick-chip"><span class="win">&#10003;</span> OVER 6 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">BUF @ TBL</span><span class="score">3-4</span></div><div class="game-chips"><span class="pick-chip"><span class="win">&#10003;</span> TBL ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">TOR @ EDM</span><span class="score">4-2</span></div><div class="game-chips"><span class="pick-chip"><span class="loss">&#10007;</span> EDM ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div></div>
+</div></div>
+</div>
+
+
+<script>
+function showTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.remove('hidden');
+    event.target.classList.add('active');
+}
+
+// Chart tooltip
+document.querySelectorAll('.hover-rect').forEach(rect => {
+    rect.addEventListener('mousemove', function(e) {
+        const tip = document.getElementById('chart-tooltip');
+        if (!tip) return;
+        const d = this.dataset;
+        tip.innerHTML = '<strong>' + d.date + '</strong><br>' +
+            '<span style="color:#3fb950">NBA: ' + (d.nba >= 0 ? '+' : '') + parseFloat(d.nba).toFixed(1) + 'u</span><br>' +
+            '<span style="color:#58a6ff">NHL: ' + (d.nhl >= 0 ? '+' : '') + parseFloat(d.nhl).toFixed(1) + 'u</span><br>' +
+            'Total: ' + (d.total >= 0 ? '+' : '') + parseFloat(d.total).toFixed(1) + 'u';
+        tip.style.display = 'block';
+        const container = tip.parentElement;
+        const rect2 = container.getBoundingClientRect();
+        let left = e.clientX - rect2.left + 12;
+        if (left + 150 > rect2.width) left = e.clientX - rect2.left - 150;
+        tip.style.left = left + 'px';
+        tip.style.top = (e.clientY - rect2.top - 40) + 'px';
+    });
+    rect.addEventListener('mouseleave', function() {
+        const tip = document.getElementById('chart-tooltip');
+        if (tip) tip.style.display = 'none';
+    });
+});
+</script>
+</body>
+</html>
