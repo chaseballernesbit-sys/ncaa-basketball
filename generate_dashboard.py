@@ -254,10 +254,24 @@ def star_display(conf: int) -> str:
     return f'<span class="stars">{filled}{empty}</span>'
 
 
+def grade_css_class(grade: str) -> str:
+    """Return CSS class for a grade badge."""
+    if not grade:
+        return "grade-default"
+    g = grade.upper().strip()
+    if g in ("A+", "A"):
+        return "grade-a"
+    elif g == "B+":
+        return "grade-b-plus"
+    else:
+        return "grade-b"
+
+
 def nba_pick_chip(label: str, detail: str, grade: str, correct) -> str:
     """Render a single NBA bet as a styled chip."""
     icon = pick_result_icon(correct)
-    grade_html = f'<span class="grade">{grade}</span>' if grade else ""
+    gcls = grade_css_class(grade)
+    grade_html = f'<span class="grade {gcls}">{grade}</span>' if grade else ""
     return f'<span class="pick-chip">{icon} {label} <span class="pick-detail">{detail}</span>{grade_html}</span>'
 
 
@@ -570,21 +584,56 @@ def format_rolling(stats: dict) -> str:
     return f'<span class="{cls}">{w}-{l} ({pct:.0f}%)</span>'
 
 
+def win_pct_bar(w: int, l: int) -> str:
+    """Render a small CSS progress bar for win percentage."""
+    total = w + l
+    if total == 0:
+        return ""
+    pct = w / total * 100
+    cls = "good" if pct >= 55 else ("bad" if pct < 45 else "neutral")
+    return f'<span class="win-pct-bar"><span class="win-pct-fill {cls}" style="width:{pct:.0f}%"></span></span>'
+
+
 def build_record_section(nba_stats: dict, nhl_stats: dict,
                          nba_picks: list, nhl_picks: list) -> str:
+    nba_o = nba_stats["overall"]
+    nhl_o = nhl_stats["overall"]
+    total_w = nba_o["wins"] + nhl_o["wins"]
+    total_l = nba_o["losses"] + nhl_o["losses"]
+    total_games = total_w + total_l
+    win_pct = (total_w / total_games * 100) if total_games > 0 else 0
+
+    # Compute total profit from cumulative data
+    profit_data = compute_cumulative_profit(nba_picks, nhl_picks)
+    total_profit = profit_data[-1]["total_cum"] if profit_data else 0.0
+    profit_sign = "+" if total_profit >= 0 else ""
+    profit_color = "#00b894" if total_profit >= 0 else "#ff4757"
+
+    # Hero stats bar
     html = '<div class="section">\n'
+    html += '<div class="hero-stats">\n'
+    html += f'<div class="hero-card green"><div class="hero-label">Overall Record</div>'
+    html += f'<div class="hero-value">{total_w}-{total_l}</div>'
+    html += f'<div class="hero-sub">NBA {nba_o["wins"]}-{nba_o["losses"]} / NHL {nhl_o["wins"]}-{nhl_o["losses"]}</div></div>\n'
+    html += f'<div class="hero-card blue"><div class="hero-label">Win Rate</div>'
+    html += f'<div class="hero-value">{win_pct:.1f}%</div>'
+    html += f'<div class="hero-sub">{total_games} total picks graded</div></div>\n'
+    html += f'<div class="hero-card red"><div class="hero-label">Total Profit</div>'
+    html += f'<div class="hero-value" style="color:{profit_color}">{profit_sign}{total_profit:.1f}u</div>'
+    html += f'<div class="hero-sub">1u per pick at -110</div></div>\n'
+    html += '</div>\n'
+
     html += '<h2>Record Summary <span class="record-subtitle">(top picks only)</span></h2>\n'
     html += '<div class="cards-row">\n'
 
     # NBA
     html += '<div class="card">\n'
-    nba_o = nba_stats["overall"]
     html += f'<h3>NBA <span class="record-overall">{format_record(nba_o["wins"], nba_o["losses"])}</span></h3>\n'
     html += '<div class="record-breakdown">\n'
     for label, key in [("Spread", "spread"), ("ML", "ml")]:
         s = nba_stats[key]
         if s["wins"] + s["losses"] > 0:
-            html += f'<div class="record-row"><span class="record-label">{label}:</span> {format_record(s["wins"], s["losses"])}</div>\n'
+            html += f'<div class="record-row"><span class="record-label">{label}:</span> {format_record(s["wins"], s["losses"])}{win_pct_bar(s["wins"], s["losses"])}</div>\n'
     # Rolling form
     nba_7d = compute_rolling_stats(nba_picks, 7, "nba")
     nba_14d = compute_rolling_stats(nba_picks, 14, "nba")
@@ -596,13 +645,12 @@ def build_record_section(nba_stats: dict, nhl_stats: dict,
 
     # NHL
     html += '<div class="card">\n'
-    nhl_o = nhl_stats["overall"]
     html += f'<h3>NHL <span class="record-overall">{format_record(nhl_o["wins"], nhl_o["losses"])}</span></h3>\n'
     html += '<div class="record-breakdown">\n'
     for label, key in [("ML", "ml"), ("Total", "total"), ("Puck Line", "pl")]:
         s = nhl_stats[key]
         if s["wins"] + s["losses"] > 0:
-            html += f'<div class="record-row"><span class="record-label">{label}:</span> {format_record(s["wins"], s["losses"])}</div>\n'
+            html += f'<div class="record-row"><span class="record-label">{label}:</span> {format_record(s["wins"], s["losses"])}{win_pct_bar(s["wins"], s["losses"])}</div>\n'
     # Rolling form
     nhl_7d = compute_rolling_stats(nhl_picks, 7, "nhl")
     nhl_14d = compute_rolling_stats(nhl_picks, 14, "nhl")
@@ -623,8 +671,8 @@ def build_chart_section(nba_picks: list, nhl_picks: list) -> str:
         return ""
 
     # Chart dimensions
-    w, h = 800, 200
-    pad_l, pad_r, pad_t, pad_b = 50, 20, 15, 30
+    w, h = 800, 250
+    pad_l, pad_r, pad_t, pad_b = 50, 20, 15, 35
 
     plot_w = w - pad_l - pad_r
     plot_h = h - pad_t - pad_b
@@ -643,10 +691,14 @@ def build_chart_section(nba_picks: list, nhl_picks: list) -> str:
     def y_pos(v):
         return pad_t + plot_h - ((v - y_min) / y_range) * plot_h
 
-    # Build polyline points
-    def polyline(key, color):
+    # Build polyline points and gradient fill
+    def polyline(key, color, grad_id):
         pts = " ".join(f"{x_pos(i):.1f},{y_pos(d[key]):.1f}" for i, d in enumerate(data))
-        return f'<polyline points="{pts}" fill="none" stroke="{color}" stroke-width="2" class="chart-line"/>'
+        # Gradient fill polygon (line down to zero, back along x-axis)
+        fill_pts = pts + f" {x_pos(len(data)-1):.1f},{zero_y:.1f} {x_pos(0):.1f},{zero_y:.1f}"
+        fill_svg = f'<polygon points="{fill_pts}" fill="url(#{grad_id})" opacity="0.15"/>'
+        line_svg = f'<polyline points="{pts}" fill="none" stroke="{color}" stroke-width="2.5" class="chart-line"/>'
+        return fill_svg + line_svg
 
     # Zero line y
     zero_y = y_pos(0)
@@ -681,13 +733,27 @@ def build_chart_section(nba_picks: list, nhl_picks: list) -> str:
         hover_rects += f'<rect x="{rx:.1f}" y="{pad_t}" width="{rect_w:.1f}" height="{plot_h}" fill="transparent" class="hover-rect" data-idx="{i}" data-date="{d["date"]}" data-nba="{d["nba_cum"]}" data-nhl="{d["nhl_cum"]}" data-total="{d["total_cum"]}"/>'
 
     svg = f'''<svg viewBox="0 0 {w} {h}" class="profit-chart" xmlns="http://www.w3.org/2000/svg">
-  <rect x="{pad_l}" y="{pad_t}" width="{plot_w}" height="{plot_h}" fill="#161b22" rx="4"/>
+  <defs>
+    <linearGradient id="grad-nba" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#00b894"/>
+      <stop offset="100%" stop-color="#00b894" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="grad-nhl" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4dabf7"/>
+      <stop offset="100%" stop-color="#4dabf7" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="grad-total" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c9d1d9"/>
+      <stop offset="100%" stop-color="#c9d1d9" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="{pad_l}" y="{pad_t}" width="{plot_w}" height="{plot_h}" fill="#0d1117" rx="2"/>
   {y_labels}
   {x_labels}
-  <line x1="{pad_l}" y1="{zero_y:.1f}" x2="{w - pad_r}" y2="{zero_y:.1f}" stroke="#484f58" stroke-width="1" stroke-dasharray="4,3"/>
-  {polyline("nba_cum", "#3fb950")}
-  {polyline("nhl_cum", "#58a6ff")}
-  {polyline("total_cum", "#e6edf3")}
+  <line x1="{pad_l}" y1="{zero_y:.1f}" x2="{w - pad_r}" y2="{zero_y:.1f}" stroke="#30363d" stroke-width="1" stroke-dasharray="4,3"/>
+  {polyline("nba_cum", "#00b894", "grad-nba")}
+  {polyline("nhl_cum", "#4dabf7", "grad-nhl")}
+  {polyline("total_cum", "#c9d1d9", "grad-total")}
   {hover_rects}
 </svg>'''
 
@@ -695,9 +761,9 @@ def build_chart_section(nba_picks: list, nhl_picks: list) -> str:
     html += '<h2>Cumulative Profit <span class="record-subtitle">(1u per pick, spreads/totals at -110)</span></h2>\n'
     html += '<div class="chart-container">\n'
     html += '<div class="chart-legend">'
-    html += '<span class="legend-item"><span class="legend-dot" style="background:#3fb950"></span>NBA</span>'
-    html += '<span class="legend-item"><span class="legend-dot" style="background:#58a6ff"></span>NHL</span>'
-    html += '<span class="legend-item"><span class="legend-dot" style="background:#e6edf3"></span>Combined</span>'
+    html += '<span class="legend-item"><span class="legend-dot" style="background:#00b894"></span>NBA</span>'
+    html += '<span class="legend-item"><span class="legend-dot" style="background:#4dabf7"></span>NHL</span>'
+    html += '<span class="legend-item"><span class="legend-dot" style="background:#c9d1d9"></span>Combined</span>'
     html += '</div>\n'
     html += svg
     html += '<div class="chart-tooltip" id="chart-tooltip"></div>\n'
@@ -717,6 +783,13 @@ def build_tier_section(nba_picks: list, nhl_picks: list) -> str:
     html += '<h2>Confidence Tier Breakdown</h2>\n'
     html += '<div class="cards-row">\n'
 
+    def tier_row_class(pct):
+        if pct >= 60:
+            return ' class="tier-good"'
+        elif pct < 45:
+            return ' class="tier-bad"'
+        return ""
+
     # NBA tier card
     html += '<div class="card">\n'
     html += '<h3>NBA by Grade</h3>\n'
@@ -731,7 +804,7 @@ def build_tier_section(nba_picks: list, nhl_picks: list) -> str:
             total = w + l
             pct = w / total * 100 if total > 0 else 0
             cls = "win" if pct >= 55 else ("loss" if pct < 45 else "")
-            html += f'<tr><td>{g}</td><td>{w}-{l}</td><td class="{cls}">{pct:.0f}%</td></tr>\n'
+            html += f'<tr{tier_row_class(pct)}><td>{g}</td><td>{w}-{l}</td><td class="{cls}">{pct:.0f}%</td></tr>\n'
         html += '</tbody></table>\n'
     else:
         html += '<div class="no-picks">No graded picks yet</div>\n'
@@ -749,7 +822,7 @@ def build_tier_section(nba_picks: list, nhl_picks: list) -> str:
             pct = w / total * 100 if total > 0 else 0
             cls = "win" if pct >= 55 else ("loss" if pct < 45 else "")
             star_str = "&#9733;" * stars
-            html += f'<tr><td><span class="stars">{star_str}</span></td><td>{w}-{l}</td><td class="{cls}">{pct:.0f}%</td></tr>\n'
+            html += f'<tr{tier_row_class(pct)}><td><span class="stars">{star_str}</span></td><td>{w}-{l}</td><td class="{cls}">{pct:.0f}%</td></tr>\n'
         html += '</tbody></table>\n'
     else:
         html += '<div class="no-picks">No rated picks yet</div>\n'
@@ -766,8 +839,8 @@ def build_daily_section(nba_by_date: dict, nhl_by_date: dict) -> str:
     html += '<h2>Day-by-Day Results</h2>\n'
     html += '<div class="tabs">\n'
     html += '<button class="tab active" onclick="showTab(\'all\')">All</button>\n'
-    html += '<button class="tab" onclick="showTab(\'nba\')">NBA</button>\n'
-    html += '<button class="tab" onclick="showTab(\'nhl\')">NHL</button>\n'
+    html += '<button class="tab tab-nba" onclick="showTab(\'nba\')">NBA</button>\n'
+    html += '<button class="tab tab-nhl" onclick="showTab(\'nhl\')">NHL</button>\n'
     html += '</div>\n'
 
     # Helper to render a day-block
@@ -781,7 +854,16 @@ def build_daily_section(nba_by_date: dict, nhl_by_date: dict) -> str:
             rows = "\n".join(r for p in picks if (r := render_nhl_game_row(p)))
         record = format_day_record(w, l)
         sport_badge = f'<span class="sport-badge {sport}">{sport.upper()}</span>' if sport else ""
-        return f"""<div class="day-block">
+        # Day block classes: sport color + win/loss accent
+        block_cls = f"day-{sport}"
+        total = w + l
+        if total > 0:
+            pct = w / total * 100
+            if pct >= 55:
+                block_cls += " day-win"
+            elif pct < 45:
+                block_cls += " day-loss"
+        return f"""<div class="day-block {block_cls}">
 <div class="day-header">
     <span class="day-date">{date_disp}</span>
     {sport_badge}
@@ -841,177 +923,261 @@ def generate_html(nba_picks: list, nba_picks_all: list, nhl_picks: list) -> str:
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{
     background: #0d1117;
-    color: #e6edf3;
+    color: #c9d1d9;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-    padding: 16px;
-    max-width: 1200px;
+    padding: 16px 20px;
+    max-width: 1100px;
     margin: 0 auto;
+    line-height: 1.4;
+    font-size: 13px;
 }}
 
-/* Header */
+/* ---- Header ---- */
 header {{
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 20px 0;
-    border-bottom: 1px solid #30363d;
-    margin-bottom: 24px;
+    align-items: baseline;
+    padding: 16px 0 14px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #00b894;
 }}
-header h1 {{ font-size: 22px; font-weight: 600; color: #f0f6fc; }}
-header .generated {{ font-size: 13px; color: #8b949e; }}
+header h1 {{
+    font-size: 22px;
+    font-weight: 700;
+    color: #f0f6fc;
+    letter-spacing: -0.3px;
+}}
+header .generated {{
+    font-size: 12px;
+    color: #6e7681;
+}}
 
-/* Sections */
-.section {{ margin-bottom: 28px; }}
+/* ---- Sections ---- */
+.section {{ margin-bottom: 24px; }}
 .section h2 {{
-    font-size: 17px; font-weight: 600; color: #f0f6fc;
-    margin-bottom: 12px; padding-bottom: 8px;
-    border-bottom: 1px solid #21262d;
+    font-size: 14px; font-weight: 700; color: #f0f6fc;
+    margin-bottom: 10px; padding-bottom: 6px;
+    border-bottom: 1px solid #1c2129;
+    text-transform: uppercase; letter-spacing: 0.5px;
 }}
 .section-header {{
     display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #21262d;
+    margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #1c2129;
 }}
 .section-header h2 {{ margin-bottom: 0; padding-bottom: 0; border-bottom: none; }}
-.record-subtitle {{ font-weight: 400; color: #8b949e; font-size: 13px; }}
+.record-subtitle {{ font-weight: 400; color: #6e7681; font-size: 12px; text-transform: none; letter-spacing: 0; }}
 
-/* Lock badge */
+/* ---- Lock badge ---- */
 .lock-status {{
-    margin-top: 10px; padding-top: 8px; border-top: 1px solid #21262d;
+    margin-top: 10px; padding-top: 8px; border-top: 1px solid #1c2129;
     text-align: center;
 }}
 .lock-badge {{
-    display: inline-block; background: #1a3a1a; color: #3fb950;
-    border: 1px solid #238636; border-radius: 6px;
-    padding: 4px 14px; font-size: 12px; font-weight: 600;
+    display: inline-block; background: #0d1117; color: #00b894;
+    border: 1px solid #00b894; border-radius: 3px;
+    padding: 3px 12px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
 }}
 
-/* Cards */
+/* ---- Hero stats bar ---- */
+.hero-stats {{
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    margin-bottom: 20px;
+}}
+@media (max-width: 600px) {{ .hero-stats {{ grid-template-columns: 1fr; }} }}
+.hero-card {{
+    background: #161b22;
+    border: 1px solid #1c2129;
+    border-radius: 4px;
+    padding: 16px;
+    text-align: center;
+    border-top: 2px solid #30363d;
+}}
+.hero-card.green {{ border-top-color: #00b894; }}
+.hero-card.blue {{ border-top-color: #4dabf7; }}
+.hero-card.red {{ border-top-color: #ff4757; }}
+.hero-label {{
+    font-size: 10px; font-weight: 600; color: #6e7681;
+    text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px;
+}}
+.hero-value {{
+    font-size: 28px; font-weight: 800; color: #f0f6fc; line-height: 1;
+    font-variant-numeric: tabular-nums;
+}}
+.hero-sub {{ font-size: 11px; color: #484f58; margin-top: 4px; }}
+
+/* ---- Cards ---- */
 .cards-row {{
-    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
 }}
 @media (max-width: 700px) {{ .cards-row {{ grid-template-columns: 1fr; }} }}
 .card {{
-    background: #161b22; border: 1px solid #30363d;
-    border-radius: 8px; padding: 16px;
+    background: #161b22; border: 1px solid #1c2129;
+    border-radius: 4px; padding: 14px;
 }}
-.card h3 {{ font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #f0f6fc; }}
-.game-count {{ font-weight: 400; color: #8b949e; font-size: 13px; }}
-.record-overall {{ font-weight: 400; color: #58a6ff; font-size: 14px; margin-left: 8px; }}
+.card h3 {{ font-size: 13px; font-weight: 700; margin-bottom: 10px; color: #f0f6fc; text-transform: uppercase; letter-spacing: 0.3px; }}
+.game-count {{ font-weight: 400; color: #6e7681; font-size: 12px; text-transform: none; letter-spacing: 0; }}
+.record-overall {{ font-weight: 600; color: #4dabf7; font-size: 13px; margin-left: 8px; text-transform: none; letter-spacing: 0; }}
 
-/* Picks list */
-.picks-list {{ display: flex; flex-direction: column; gap: 8px; }}
+/* Sport-colored top border on today's cards */
+#card-nba {{ border-top: 2px solid #00b894; }}
+#card-nhl {{ border-top: 2px solid #4dabf7; }}
+
+/* ---- Picks list ---- */
+.picks-list {{ display: flex; flex-direction: column; gap: 6px; }}
 .game-row {{
-    background: #0d1117; border-radius: 6px; padding: 10px 12px;
+    background: #0d1117; border-radius: 3px; padding: 8px 10px;
+    border-left: 2px solid transparent;
 }}
+.game-row:hover {{ background: #111820; }}
 .game-header {{
     display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }}
 .matchup {{ font-weight: 600; font-size: 13px; color: #c9d1d9; }}
-.score {{ font-size: 12px; color: #8b949e; }}
-.game-chips {{ display: flex; flex-wrap: wrap; gap: 6px; }}
+.score {{ font-size: 11px; color: #6e7681; }}
+.game-chips {{ display: flex; flex-wrap: wrap; gap: 4px; }}
 
-/* Pick chips */
+/* ---- Pick chips ---- */
 .pick-chip {{
     display: inline-flex; align-items: center; gap: 4px;
-    background: #21262d; border-radius: 4px; padding: 3px 8px;
-    font-size: 12px; color: #c9d1d9; white-space: nowrap;
+    background: #1c2129; border-radius: 3px; padding: 2px 7px;
+    font-size: 11px; color: #c9d1d9; white-space: nowrap;
+    border-left: 2px solid #30363d;
 }}
+.pick-chip:has(.win) {{ border-left-color: #00b894; }}
+.pick-chip:has(.loss) {{ border-left-color: #ff4757; }}
+.pick-chip:has(.pending) {{ border-left-color: #ffa502; }}
 .pick-detail {{
-    color: #8b949e; font-size: 11px; text-transform: uppercase;
-    margin-left: 2px;
+    color: #6e7681; font-size: 10px; text-transform: uppercase;
+    margin-left: 2px; font-weight: 600;
 }}
+/* Grade badges */
 .grade {{
-    background: #30363d; border-radius: 3px; padding: 1px 4px;
-    font-size: 10px; font-weight: 600; color: #58a6ff; margin-left: 3px;
+    border-radius: 2px; padding: 1px 4px;
+    font-size: 10px; font-weight: 700; margin-left: 3px;
 }}
+.grade-a {{ background: rgba(0,184,148,0.15); color: #00b894; }}
+.grade-b-plus {{ background: rgba(77,171,247,0.15); color: #4dabf7; }}
+.grade-b {{ background: rgba(110,118,129,0.15); color: #8b949e; }}
+.grade-default {{ background: #1c2129; color: #6e7681; }}
 
 .no-picks {{
-    color: #484f58; font-style: italic; font-size: 13px; padding: 16px 0;
+    color: #30363d; font-size: 12px; padding: 12px 0;
 }}
 
-/* Records */
+/* ---- Records ---- */
 .record-breakdown {{ display: flex; flex-direction: column; gap: 4px; }}
 .record-row {{ font-size: 13px; color: #c9d1d9; }}
-.record-label {{ color: #8b949e; display: inline-block; width: 80px; }}
-.rolling-form {{ margin-top: 8px; padding-top: 6px; border-top: 1px solid #21262d; }}
+.record-label {{ color: #6e7681; display: inline-block; width: 70px; }}
+.rolling-form {{ margin-top: 8px; padding-top: 6px; border-top: 1px solid #1c2129; }}
 
-/* Colors */
-.win {{ color: #3fb950; }}
-.loss {{ color: #f85149; }}
-.pending {{ color: #d29922; }}
-.stars {{ color: #d29922; font-size: 12px; letter-spacing: -1px; }}
+/* Win% progress bar */
+.win-pct-bar {{
+    display: block; height: 3px;
+    background: #1c2129; margin-top: 3px; overflow: hidden;
+}}
+.win-pct-fill {{ height: 100%; }}
+.win-pct-fill.good {{ background: #00b894; }}
+.win-pct-fill.bad {{ background: #ff4757; }}
+.win-pct-fill.neutral {{ background: #484f58; }}
 
-/* Tier tables */
+/* ---- Colors ---- */
+.win {{ color: #00b894; font-weight: 600; }}
+.loss {{ color: #ff4757; font-weight: 600; }}
+.pending {{ color: #ffa502; }}
+.stars {{ color: #ffa502; font-size: 12px; letter-spacing: -1px; }}
+
+/* ---- Tier tables ---- */
 .tier-table {{
-    width: 100%; border-collapse: collapse; font-size: 13px;
+    width: 100%; border-collapse: collapse; font-size: 12px;
 }}
 .tier-table th {{
-    text-align: left; color: #8b949e; font-weight: 500;
-    padding: 4px 8px; border-bottom: 1px solid #30363d;
+    text-align: left; color: #6e7681; font-weight: 600;
+    padding: 4px 8px; border-bottom: 1px solid #1c2129;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
 }}
 .tier-table td {{
-    padding: 4px 8px; color: #c9d1d9; border-bottom: 1px solid #21262d;
+    padding: 5px 8px; color: #c9d1d9; border-bottom: 1px solid #1c2129;
 }}
+.tier-table tr.tier-good {{ background: rgba(0,184,148,0.05); }}
+.tier-table tr.tier-bad {{ background: rgba(255,71,87,0.05); }}
 
-/* Profit chart */
+/* ---- Profit chart ---- */
 .chart-container {{
-    background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+    background: #161b22; border: 1px solid #1c2129; border-radius: 4px;
     padding: 12px; position: relative;
 }}
 .profit-chart {{ width: 100%; height: auto; }}
-.chart-label {{ fill: #8b949e; font-size: 11px; font-family: inherit; }}
-.chart-grid {{ stroke: #21262d; stroke-width: 1; }}
+.chart-label {{ fill: #6e7681; font-size: 11px; font-family: inherit; }}
+.chart-grid {{ stroke: #1c2129; stroke-width: 1; }}
 .chart-line {{ vector-effect: non-scaling-stroke; }}
 .chart-legend {{
-    display: flex; gap: 16px; margin-bottom: 8px; font-size: 12px; color: #8b949e;
+    display: flex; gap: 16px; margin-bottom: 8px; font-size: 11px; color: #6e7681;
 }}
 .legend-item {{ display: flex; align-items: center; gap: 5px; }}
 .legend-dot {{
-    width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+    width: 8px; height: 8px; border-radius: 2px; display: inline-block;
 }}
 .chart-tooltip {{
-    display: none; position: absolute; background: #21262d;
-    border: 1px solid #484f58; border-radius: 6px; padding: 8px 12px;
-    font-size: 12px; color: #e6edf3; pointer-events: none; z-index: 10;
+    display: none; position: absolute; background: #1c2129;
+    border: 1px solid #30363d; border-radius: 3px; padding: 8px 10px;
+    font-size: 11px; color: #c9d1d9; pointer-events: none; z-index: 10;
     white-space: nowrap;
 }}
 
-/* Tabs */
-.tabs {{ display: flex; gap: 4px; margin-bottom: 12px; }}
+/* ---- Tabs ---- */
+.tabs {{ display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid #1c2129; }}
 .tab {{
-    background: #21262d; color: #8b949e; border: 1px solid #30363d;
-    border-radius: 6px; padding: 6px 16px; cursor: pointer;
-    font-size: 13px; font-family: inherit;
+    background: none; color: #6e7681; border: none; border-bottom: 2px solid transparent;
+    padding: 6px 16px; cursor: pointer;
+    font-size: 12px; font-family: inherit; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
 }}
-.tab.active {{ background: #161b22; color: #f0f6fc; border-color: #58a6ff; }}
-.tab:hover {{ color: #f0f6fc; }}
+.tab.active {{ color: #f0f6fc; border-bottom-color: #4dabf7; }}
+.tab:hover {{ color: #c9d1d9; }}
 .tab-content.hidden {{ display: none; }}
+.tab-nba.active {{ border-bottom-color: #00b894; color: #00b894; }}
+.tab-nhl.active {{ border-bottom-color: #4dabf7; color: #4dabf7; }}
 
-/* Day blocks */
+/* ---- Day blocks ---- */
 .day-block {{
-    background: #161b22; border: 1px solid #30363d;
-    border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
+    background: #161b22; border: 1px solid #1c2129;
+    border-radius: 4px; padding: 10px 12px; margin-bottom: 6px;
+    border-left: 3px solid transparent;
 }}
+.day-block:hover {{ background: #1a2030; }}
+.day-block.day-nba {{ border-left-color: #00b894; }}
+.day-block.day-nhl {{ border-left-color: #4dabf7; }}
+.day-block.day-win {{ }}
+.day-block.day-loss {{ }}
 .day-header {{
-    display: flex; align-items: center; gap: 10px;
-    margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #21262d;
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #1c2129;
 }}
-.day-date {{ font-weight: 600; font-size: 14px; color: #f0f6fc; min-width: 70px; }}
+.day-date {{ font-weight: 700; font-size: 13px; color: #f0f6fc; min-width: 70px; }}
 .sport-badge {{
-    font-size: 11px; font-weight: 600; padding: 2px 8px;
-    border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+    font-size: 10px; font-weight: 700; padding: 2px 6px;
+    border-radius: 2px; text-transform: uppercase; letter-spacing: 0.5px;
 }}
-.sport-badge.nba {{ background: #1a3a1a; color: #3fb950; }}
-.sport-badge.nhl {{ background: #172240; color: #58a6ff; }}
-.day-record {{ font-size: 13px; margin-left: auto; }}
-.day-picks {{ display: flex; flex-direction: column; gap: 6px; }}
+.sport-badge.nba {{ background: rgba(0,184,148,0.12); color: #00b894; }}
+.sport-badge.nhl {{ background: rgba(77,171,247,0.12); color: #4dabf7; }}
+.day-record {{ font-size: 12px; margin-left: auto; font-weight: 600; }}
+.day-picks {{ display: flex; flex-direction: column; gap: 4px; }}
+
+/* ---- Mobile ---- */
+@media (max-width: 480px) {{
+    body {{ padding: 10px; }}
+    header h1 {{ font-size: 18px; }}
+    .hero-value {{ font-size: 22px; }}
+    .hero-stats {{ gap: 8px; }}
+}}
 </style>
 </head>
 <body>
 <header>
     <h1>Sports Picks Dashboard</h1>
-    <span class="generated">Generated {generated}</span>
+    <span class="generated">{generated}</span>
 </header>
 
 {build_today_section(nba_by_date, nhl_by_date, locked)}
@@ -1025,7 +1191,8 @@ function showTab(tab) {{
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
     document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
     document.getElementById('tab-' + tab).classList.remove('hidden');
-    event.target.classList.add('active');
+    const btn = event.target;
+    btn.classList.add('active');
 }}
 
 // Chart tooltip
@@ -1035,8 +1202,8 @@ document.querySelectorAll('.hover-rect').forEach(rect => {{
         if (!tip) return;
         const d = this.dataset;
         tip.innerHTML = '<strong>' + d.date + '</strong><br>' +
-            '<span style="color:#3fb950">NBA: ' + (d.nba >= 0 ? '+' : '') + parseFloat(d.nba).toFixed(1) + 'u</span><br>' +
-            '<span style="color:#58a6ff">NHL: ' + (d.nhl >= 0 ? '+' : '') + parseFloat(d.nhl).toFixed(1) + 'u</span><br>' +
+            '<span style="color:#00b894">NBA: ' + (d.nba >= 0 ? '+' : '') + parseFloat(d.nba).toFixed(1) + 'u</span><br>' +
+            '<span style="color:#4dabf7">NHL: ' + (d.nhl >= 0 ? '+' : '') + parseFloat(d.nhl).toFixed(1) + 'u</span><br>' +
             'Total: ' + (d.total >= 0 ? '+' : '') + parseFloat(d.total).toFixed(1) + 'u';
         tip.style.display = 'block';
         const container = tip.parentElement;
