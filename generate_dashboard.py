@@ -110,6 +110,11 @@ def load_nhl_picks() -> list:
     filtered = []
 
     for p in raw:
+        # Skip non-NHL games (e.g. Olympic/international — game IDs start with 202509)
+        gid = str(p.get("game_id", ""))
+        if gid.startswith("202509"):
+            continue
+
         has_tags = any(k in p for k in ("top_play_ml", "top_play_total", "top_play_pl"))
 
         if has_tags:

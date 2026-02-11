@@ -38,7 +38,7 @@ from nba.nba_team_mappings import (
 
 class NBAAnalyzer:
     # Model parameters
-    TOTAL_REGRESSION = 0.25      # Moderate regression toward league average total
+    TOTAL_REGRESSION = 0.15      # Light regression toward league average total
     EFFICIENCY_DEFLATOR = 0.82   # Regress more to reduce extreme predictions
     TEMPO_TOTAL_FACTOR = 0.5     # Pace adjustment factor
     SPREAD_STD_DEV = 10.5        # Tighter than NCAA (11.0)
@@ -367,7 +367,7 @@ class NBAAnalyzer:
         if starters_out >= 2:
             extra = SITUATIONAL_ADJUSTMENTS.get("multiple_starters_out", -2.0)
             if starters_out >= 3:
-                extra *= 1.5  # -3.0 for 3+ starters
+                extra *= 1.25  # -1.25 for 3+ starters
             total_impact += extra
             details.append(f"Multiple starters out ({starters_out}) -> {extra:+.1f} pts")
 
@@ -384,8 +384,8 @@ class NBAAnalyzer:
                 total_impact *= (1 - reduction)
                 details.append(f"Bench depth (ratio {depth_ratio:.2f}) absorbs {reduction*100:.0f}%: {old_impact:+.1f} -> {total_impact:+.1f}")
 
-        # Cap total injury impact at -8 (prevent runaway adjustments)
-        total_impact = max(total_impact, -8.0)
+        # Cap total injury impact at -6 (prevent runaway adjustments)
+        total_impact = max(total_impact, -6.0)
 
         return round(total_impact, 1), details
 
@@ -743,9 +743,9 @@ class NBAAnalyzer:
         edge = predicted_total - actual_total
         abs_edge = abs(edge)
 
-        if edge > 3.0:
+        if edge > 4.0:
             pick = "OVER"
-        elif edge < -3.0:
+        elif edge < -4.0:
             pick = "UNDER"
         else:
             pick = "PASS"
@@ -873,7 +873,7 @@ class NBAAnalyzer:
         adjusted_total = expected["predicted_total"]
         # Injuries affect totals too (injured star = fewer points)
         inj_total_adj = (situational.get("away_injury_impact", 0) +
-                         situational.get("home_injury_impact", 0)) * 0.25
+                         situational.get("home_injury_impact", 0)) * 0.15
         adjusted_total += inj_total_adj
 
         # Post-All-Star rust adjustment on totals

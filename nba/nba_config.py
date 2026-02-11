@@ -31,7 +31,7 @@ USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36
 # HOME COURT ADVANTAGE
 # =============================================================================
 
-HOME_COURT_ADVANTAGE = 2.0  # NBA average (~2.5 pts, much less than NCAA 3.75)
+HOME_COURT_ADVANTAGE = 2.5  # NBA average (~2.5 pts, much less than NCAA 3.75)
 
 ELITE_HOME_COURTS = {
     "Denver Nuggets": 3.5,
@@ -56,7 +56,7 @@ TIER_LABELS = {1: "Elite", 2: "Playoff", 3: "Play-in", 4: "Lottery"}
 TIER_CONFIDENCE = {1: 1.0, 2: 0.85, 3: 0.70, 4: 0.55}
 
 SPREAD_EDGE_BY_TIER = {1: 1.5, 2: 2.0, 3: 2.5, 4: 3.5}
-TOTAL_EDGE_BY_TIER = {1: 4.0, 2: 5.0, 3: 6.0, 4: 7.0}
+TOTAL_EDGE_BY_TIER = {1: 5.0, 2: 6.0, 3: 7.0, 4: 8.0}
 
 # Star rating thresholds
 STAR_THRESHOLDS = {5: 5.0, 4: 4.0, 3: 3.0, 2: 2.0, 1: 1.5}
@@ -81,7 +81,7 @@ MAX_DAILY_UNITS = 10.0
 
 AVG_PACE = 100.2
 AVG_EFFICIENCY = 114.6
-AVG_TOTAL = 229.5
+AVG_TOTAL = 231.0
 
 # =============================================================================
 # ROLLING WINDOW SETTINGS
@@ -130,8 +130,8 @@ POST_ALL_STAR_TOTAL_ADJ = -2.0  # points off predicted total
 # =============================================================================
 
 MAX_SPREAD_THRESHOLD = 15.0
-LARGE_SPREAD_THRESHOLD = 10.0
-LARGE_SPREAD_EXTRA_EDGE = 2.0
+LARGE_SPREAD_THRESHOLD = 8.0
+LARGE_SPREAD_EXTRA_EDGE = 3.0
 
 # =============================================================================
 # FOUR FACTORS WEIGHTS (tuned for NBA)
@@ -201,11 +201,11 @@ SITUATIONAL_ADJUSTMENTS = {
 # =============================================================================
 
 INJURY_TIERS = {
-    "superstar": {"ppg_min": 26, "usage_min": 0.30, "impact": -3.5},
-    "allstar": {"ppg_min": 20, "usage_min": 0.25, "impact": -2.5},
-    "quality_starter": {"ppg_min": 15, "usage_min": 0.20, "impact": -1.5},
-    "starter": {"ppg_min": 10, "usage_min": 0.15, "impact": -0.75},
-    "rotation": {"ppg_min": 5, "usage_min": 0.10, "impact": -0.4},
+    "superstar": {"ppg_min": 26, "usage_min": 0.30, "impact": -2.5},
+    "allstar": {"ppg_min": 20, "usage_min": 0.25, "impact": -1.75},
+    "quality_starter": {"ppg_min": 15, "usage_min": 0.20, "impact": -1.0},
+    "starter": {"ppg_min": 10, "usage_min": 0.15, "impact": -0.5},
+    "rotation": {"ppg_min": 5, "usage_min": 0.10, "impact": -0.25},
     "bench": {"ppg_min": 0, "usage_min": 0, "impact": -0.1},
 }
 
