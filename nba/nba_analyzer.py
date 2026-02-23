@@ -30,6 +30,7 @@ from nba.nba_config import (
     LINE_MOVEMENT_CONFIRM_THRESHOLD, LINE_MOVEMENT_CAUTION_THRESHOLD,
     ALL_STAR_BREAK_END, POST_ALL_STAR_RUST_GAMES, POST_ALL_STAR_TOTAL_ADJ,
     DEFENSIVE_MATCHUP_MAX,
+    MARKET_RESPECT_START, MARKET_RESPECT_RATE, MARKET_RESPECT_FLOOR,
 )
 from nba.nba_team_mappings import (
     normalize_team_name, get_team_tier, get_conference, same_division,
@@ -39,7 +40,7 @@ from nba.nba_team_mappings import (
 class NBAAnalyzer:
     # Model parameters
     TOTAL_REGRESSION = 0.15      # Light regression toward league average total
-    EFFICIENCY_DEFLATOR = 0.82   # Regress more to reduce extreme predictions
+    EFFICIENCY_DEFLATOR = 0.86   # Regress toward mean (higher = truer spreads for mismatches)
     TEMPO_TOTAL_FACTOR = 0.5     # Pace adjustment factor
     SPREAD_STD_DEV = 10.5        # Tighter than NCAA (11.0)
 
@@ -704,6 +705,15 @@ class NBAAnalyzer:
         # edge = predicted spread + away team's line
         # positive = away covers, negative = home covers
         edge = predicted_spread + actual_spread
+
+        # Market-respect dampening: trust the market more on large spreads
+        # Large spread "value" is often phantom - the market is usually right
+        # on big mismatches, so reduce our edge proportionally
+        if abs(actual_spread) > MARKET_RESPECT_START:
+            overage = abs(actual_spread) - MARKET_RESPECT_START
+            dampen = max(MARKET_RESPECT_FLOOR, 1.0 - overage * MARKET_RESPECT_RATE)
+            edge *= dampen
+
         abs_edge = abs(edge)
 
         # Determine pick
@@ -833,9 +843,9 @@ class NBAAnalyzer:
         # Defensive matchup signals
         def_matchup = self.calculate_defensive_matchup_signals(away_name, home_name)
 
-        # Adjust predictions with situational factors (cap at ±12)
+        # Adjust predictions with situational factors (cap at ±8)
         sit_adj = situational.get("total_adjustment", 0)
-        sit_adj = max(-12.0, min(12.0, sit_adj))
+        sit_adj = max(-8.0, min(8.0, sit_adj))
         adjusted_spread = expected["predicted_spread"] + sit_adj
 
         # Four factors fine-tune
@@ -847,8 +857,8 @@ class NBAAnalyzer:
         if def_matchup and def_matchup.get("signal", 0) != 0:
             adjusted_spread += def_matchup["signal"]
 
-        # Cap spread at ±16 (largest NBA lines rarely exceed this)
-        adjusted_spread = max(-16.0, min(16.0, adjusted_spread))
+        # Cap spread at ±18 (allow model to project truer spreads for mismatches)
+        adjusted_spread = max(-18.0, min(18.0, adjusted_spread))
 
         # Line movement signal
         line_movement = game.get("line_movement", {})
@@ -876,13 +886,16 @@ class NBAAnalyzer:
                          situational.get("home_injury_impact", 0)) * 0.15
         adjusted_total += inj_total_adj
 
-        # Post-All-Star rust adjustment on totals
+        # Post-All-Star rust: reduce totals AND compress spread toward 0
+        # Rolling stats from before break are stale, model is less reliable
         try:
             asb_end = datetime.strptime(ALL_STAR_BREAK_END, "%Y-%m-%d")
             game_date = datetime.strptime(self.date, "%Y-%m-%d")
             days_after_asb = (game_date - asb_end).days
             if 0 <= days_after_asb <= POST_ALL_STAR_RUST_GAMES:
                 adjusted_total += POST_ALL_STAR_TOTAL_ADJ
+                # Compress spread 25% toward 0 (less confident post-break)
+                adjusted_spread *= 0.75
         except (ValueError, TypeError):
             pass
 

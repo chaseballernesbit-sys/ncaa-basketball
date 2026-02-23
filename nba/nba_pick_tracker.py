@@ -112,6 +112,11 @@ def save_today_picks(analyses: list, games: list):
         if not (has_spread or has_ml):
             continue
 
+        # Exclude large spreads (matches report filtering)
+        spread_line = sv.get("actual_spread")
+        if has_spread and spread_line is not None and abs(spread_line) > 12.0:
+            has_spread = False
+
         # Top-play tagging: quality thresholds per bet type
         top_play_spread = bool(has_spread and sv.get("hit_pct", 0) >= 59)
         top_play_ml = bool(has_ml and ml.get("hit_pct", 0) >= 59)

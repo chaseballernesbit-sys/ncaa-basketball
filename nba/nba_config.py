@@ -129,9 +129,15 @@ POST_ALL_STAR_TOTAL_ADJ = -2.0  # points off predicted total
 # SPREAD / TOTAL THRESHOLDS
 # =============================================================================
 
-MAX_SPREAD_THRESHOLD = 15.0
-LARGE_SPREAD_THRESHOLD = 8.0
-LARGE_SPREAD_EXTRA_EDGE = 3.0
+MAX_SPREAD_THRESHOLD = 12.0
+LARGE_SPREAD_THRESHOLD = 7.0
+LARGE_SPREAD_EXTRA_EDGE = 4.0
+
+# Market-respect dampening: trust the market more on large spreads
+# For spreads > MARKET_RESPECT_START, reduce edge by RATE per point
+MARKET_RESPECT_START = 8.0    # Start dampening at 8-point spreads
+MARKET_RESPECT_RATE = 0.07    # 7% edge reduction per point above start
+MARKET_RESPECT_FLOOR = 0.35   # Minimum dampening factor (65% max reduction)
 
 # =============================================================================
 # FOUR FACTORS WEIGHTS (tuned for NBA)
