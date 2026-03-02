@@ -631,74 +631,61 @@ def _format_pct(val) -> str:
     return f"{val:.0%}" if val < 1 else f"{val:.1f}%"
 
 
-def build_sog_props_section(props_data: dict) -> str:
-    """Build SOG (Shots on Goal) props table section."""
-    sog_props = props_data.get("top_sog_props", [])
-    if not sog_props:
+def _build_props_table(props: list, title: str, stat_label: str) -> str:
+    """Build a props table section. Shared by SOG and Points."""
+    if not props:
         return ""
 
     html = '<div class="section">\n'
-    html += '<h2>SOS Shots on Goal Props <span class="record-subtitle">(SOS + DraftKings)</span></h2>\n'
+    html += f'<h2>{title} <span class="record-subtitle">(SOS + Model + DraftKings)</span></h2>\n'
     html += '<div class="card">\n'
     html += '<table class="props-table"><thead><tr>'
-    html += '<th>Player</th><th>Game</th><th>SOS Proj</th><th>DK Line</th>'
-    html += '<th>Odds</th><th>Model%</th><th>Implied%</th><th>Edge</th>'
+    html += f'<th>Player</th><th>Game</th><th>Proj</th><th>DK Line</th>'
+    html += '<th>Odds</th><th>Szn</th><th>L5</th><th>Prob</th><th>Edge</th><th>Why</th>'
     html += '</tr></thead><tbody>\n'
 
-    for p in sog_props[:10]:
+    for p in props[:10]:
         edge_cls = _edge_class(p.get("edge", 0))
-        html += f'<tr>'
+        blended = p.get("blended_proj", p.get("sos_proj", 0))
+        season = p.get("season_avg")
+        l5 = p.get("l5_avg")
+        reasons = p.get("matchup_reasons", [])
+
+        html += '<tr>'
         html += f'<td class="prop-player">{p.get("player", "")}'
         if p.get("team"):
             html += f' <span class="prop-team">({p["team"]})</span>'
-        html += f'</td>'
+        html += '</td>'
         html += f'<td>{p.get("game", "")}</td>'
-        html += f'<td class="num">{p.get("sos_proj", 0):.2f}</td>'
+        html += f'<td class="num">{blended:.2f}</td>'
         html += f'<td class="num">{p.get("dk_line", "")}</td>'
         html += f'<td class="num">{_format_odds(p.get("dk_odds"))}</td>'
-        html += f'<td class="num">{_format_pct(p.get("model_prob"))}</td>'
-        html += f'<td class="num">{_format_pct(p.get("implied_prob"))}</td>'
+        html += f'<td class="num">{season:.2f}</td>' if season else '<td class="num dim">--</td>'
+        html += f'<td class="num">{l5:.2f}</td>' if l5 else '<td class="num dim">--</td>'
+        html += f'<td class="num">{_format_pct(p.get("poisson_prob", p.get("model_prob")))}</td>'
         html += f'<td class="num {edge_cls}">{p.get("edge", 0):.1%}</td>'
-        html += f'</tr>\n'
+        html += f'<td class="prop-reasons">{"; ".join(reasons[:2])}</td>' if reasons else '<td></td>'
+        html += '</tr>\n'
 
     html += '</tbody></table>\n'
     html += '</div>\n</div>\n'
     return html
+
+
+def build_sog_props_section(props_data: dict) -> str:
+    """Build SOG (Shots on Goal) props table section."""
+    return _build_props_table(
+        props_data.get("top_sog_props", []),
+        "Shots on Goal Props", "SOG"
+    )
 
 
 def build_points_props_section(props_data: dict) -> str:
     """Build Points props table section."""
-    pts_props = props_data.get("top_points_props", [])
-    if not pts_props:
-        return ""
-
-    html = '<div class="section">\n'
-    html += '<h2>SOS Points Props <span class="record-subtitle">(SOS + DraftKings)</span></h2>\n'
-    html += '<div class="card">\n'
-    html += '<table class="props-table"><thead><tr>'
-    html += '<th>Player</th><th>Game</th><th>SOS Proj</th><th>DK Line</th>'
-    html += '<th>Odds</th><th>Model%</th><th>Implied%</th><th>Edge</th>'
-    html += '</tr></thead><tbody>\n'
-
-    for p in pts_props[:10]:
-        edge_cls = _edge_class(p.get("edge", 0))
-        html += f'<tr>'
-        html += f'<td class="prop-player">{p.get("player", "")}'
-        if p.get("team"):
-            html += f' <span class="prop-team">({p["team"]})</span>'
-        html += f'</td>'
-        html += f'<td>{p.get("game", "")}</td>'
-        html += f'<td class="num">{p.get("sos_proj", 0):.2f}</td>'
-        html += f'<td class="num">{p.get("dk_line", "")}</td>'
-        html += f'<td class="num">{_format_odds(p.get("dk_odds"))}</td>'
-        html += f'<td class="num">{_format_pct(p.get("model_prob"))}</td>'
-        html += f'<td class="num">{_format_pct(p.get("implied_prob"))}</td>'
-        html += f'<td class="num {edge_cls}">{p.get("edge", 0):.1%}</td>'
-        html += f'</tr>\n'
-
-    html += '</tbody></table>\n'
-    html += '</div>\n</div>\n'
-    return html
+    return _build_props_table(
+        props_data.get("top_points_props", []),
+        "Points Props", "Points"
+    )
 
 
 def build_hit_rate_section(props_data: dict) -> str:
@@ -1014,6 +1001,8 @@ header .generated {{
 .props-table .prop-player {{ font-weight: 600; color: #f0f6fc; white-space: nowrap; }}
 .props-table .prop-team {{ font-weight: 400; color: #6e7681; font-size: 11px; }}
 .props-table tr:hover {{ background: #111820; }}
+.props-table .dim {{ color: #30363d; }}
+.props-table .prop-reasons {{ font-size: 10px; color: #6e7681; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
 .edge-good {{ color: #00b894; font-weight: 700; }}
 .edge-neutral {{ color: #ffa502; font-weight: 600; }}
 .edge-low {{ color: #6e7681; }}

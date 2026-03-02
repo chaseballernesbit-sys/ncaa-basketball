@@ -232,6 +232,8 @@ header .generated {
 .props-table .prop-player { font-weight: 600; color: #f0f6fc; white-space: nowrap; }
 .props-table .prop-team { font-weight: 400; color: #6e7681; font-size: 11px; }
 .props-table tr:hover { background: #111820; }
+.props-table .dim { color: #30363d; }
+.props-table .prop-reasons { font-size: 10px; color: #6e7681; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .edge-good { color: #00b894; font-weight: 700; }
 .edge-neutral { color: #ffa502; font-weight: 600; }
 .edge-low { color: #6e7681; }
@@ -258,7 +260,7 @@ header .generated {
 <body>
 <header>
     <h1>NHL Picks Dashboard</h1>
-    <span class="generated">Mar 02, 2026 11:50 AM</span>
+    <span class="generated">Mar 02, 2026 12:02 PM</span>
 </header>
 
 <div class="section">
@@ -266,7 +268,7 @@ header .generated {
 <div class="card" id="card-nhl">
 <h3>NHL <span class="game-count">6 top picks</span></h3>
 <div class="picks-list">
-<div class="game-row"><div class="game-header"><span class="matchup">DET @ NSH</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> OVER 5.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div><div class="game-row"><div class="game-header"><span class="matchup">CBJ @ NYR</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> NYR +1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div><div class="game-row"><div class="game-header"><span class="matchup">PHI @ TOR</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> PHI ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div><div class="game-row"><div class="game-header"><span class="matchup">DAL @ VAN</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> DAL ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> DAL -1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div><div class="game-row"><div class="game-header"><span class="matchup">CAR @ SEA</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> CAR ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> CAR -1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div><div class="game-row"><div class="game-header"><span class="matchup">COL @ LAK</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> COL ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> COL -1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">DET @ NSH</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> OVER 5.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div><div class="game-row"><div class="game-header"><span class="matchup">CBJ @ NYR</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> NYR ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> CBJ +1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div><div class="game-row"><div class="game-header"><span class="matchup">PHI @ TOR</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> PHI ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div><div class="game-row"><div class="game-header"><span class="matchup">DAL @ VAN</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> DAL ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> DAL -1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div><div class="game-row"><div class="game-header"><span class="matchup">CAR @ SEA</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> CAR ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div><div class="game-row"><div class="game-header"><span class="matchup">COL @ LAK</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> COL ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> COL -1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div></div>
 </div>
 </div>
 
@@ -292,35 +294,22 @@ header .generated {
 </div>
 
 <div class="section">
-<h2>SOS Shots on Goal Props <span class="record-subtitle">(SOS + DraftKings)</span></h2>
+<h2>Shots on Goal Props <span class="record-subtitle">(SOS + Model + DraftKings)</span></h2>
 <div class="card">
-<table class="props-table"><thead><tr><th>Player</th><th>Game</th><th>SOS Proj</th><th>DK Line</th><th>Odds</th><th>Model%</th><th>Implied%</th><th>Edge</th></tr></thead><tbody>
-<tr><td class="prop-player">Trevor Zegras <span class="prop-team">(PHI)</span></td><td>PHI @ TOR</td><td class="num">2.75</td><td class="num">2.5</td><td class="num">+145</td><td class="num">52%</td><td class="num">41%</td><td class="num edge-good">11.0%</td></tr>
-<tr><td class="prop-player">Trevor Zegras <span class="prop-team">(PHI)</span></td><td>PHI @ TOR</td><td class="num">2.75</td><td class="num">1.5</td><td class="num">-205</td><td class="num">76%</td><td class="num">67%</td><td class="num edge-good">8.8%</td></tr>
-<tr><td class="prop-player">Trevor Zegras <span class="prop-team">(PHI)</span></td><td>PHI @ TOR</td><td class="num">2.75</td><td class="num">3.5</td><td class="num">+370</td><td class="num">30%</td><td class="num">21%</td><td class="num edge-good">8.4%</td></tr>
-<tr><td class="prop-player">Owen Tippett <span class="prop-team">(PHI)</span></td><td>PHI @ TOR</td><td class="num">3.40</td><td class="num">2.5</td><td class="num">-142</td><td class="num">66%</td><td class="num">59%</td><td class="num edge-neutral">7.3%</td></tr>
-<tr><td class="prop-player">Kirill Marchenko <span class="prop-team">(CBJ)</span></td><td>CBJ @ NYR</td><td class="num">3.24</td><td class="num">3.5</td><td class="num">+200</td><td class="num">41%</td><td class="num">33%</td><td class="num edge-neutral">7.3%</td></tr>
-<tr><td class="prop-player">Kirill Marchenko <span class="prop-team">(CBJ)</span></td><td>CBJ @ NYR</td><td class="num">3.24</td><td class="num">2.5</td><td class="num">-125</td><td class="num">63%</td><td class="num">56%</td><td class="num edge-neutral">7.3%</td></tr>
-<tr><td class="prop-player">Owen Tippett <span class="prop-team">(PHI)</span></td><td>PHI @ TOR</td><td class="num">3.40</td><td class="num">3.5</td><td class="num">+170</td><td class="num">44%</td><td class="num">37%</td><td class="num edge-neutral">7.1%</td></tr>
-<tr><td class="prop-player">Sean Walker <span class="prop-team">(CAR)</span></td><td>CAR @ SEA</td><td class="num">2.32</td><td class="num">1.5</td><td class="num">-154</td><td class="num">67%</td><td class="num">61%</td><td class="num edge-neutral">6.7%</td></tr>
-<tr><td class="prop-player">Sean Walker <span class="prop-team">(CAR)</span></td><td>CAR @ SEA</td><td class="num">2.32</td><td class="num">2.5</td><td class="num">+190</td><td class="num">41%</td><td class="num">34%</td><td class="num edge-neutral">6.4%</td></tr>
-<tr><td class="prop-player">Kirill Marchenko <span class="prop-team">(CBJ)</span></td><td>CBJ @ NYR</td><td class="num">3.24</td><td class="num">4.5</td><td class="num">+475</td><td class="num">23%</td><td class="num">17%</td><td class="num edge-neutral">5.3%</td></tr>
+<table class="props-table"><thead><tr><th>Player</th><th>Game</th><th>Proj</th><th>DK Line</th><th>Odds</th><th>Szn</th><th>L5</th><th>Prob</th><th>Edge</th><th>Why</th></tr></thead><tbody>
+<tr><td class="prop-player">Nathan MacKinnon <span class="prop-team">(COL)</span></td><td>COL @ LAK</td><td class="num">4.37</td><td class="num">3.5</td><td class="num">-148</td><td class="num">4.53</td><td class="num">5.40</td><td class="num">63%</td><td class="num edge-low">3.8%</td><td class="prop-reasons">vs strong D (25.3 shots/gm allowed, -14% vs avg)</td></tr>
 </tbody></table>
 </div>
 </div>
 
 <div class="section">
-<h2>SOS Points Props <span class="record-subtitle">(SOS + DraftKings)</span></h2>
+<h2>Points Props <span class="record-subtitle">(SOS + Model + DraftKings)</span></h2>
 <div class="card">
-<table class="props-table"><thead><tr><th>Player</th><th>Game</th><th>SOS Proj</th><th>DK Line</th><th>Odds</th><th>Model%</th><th>Implied%</th><th>Edge</th></tr></thead><tbody>
-<tr><td class="prop-player">Shayne Gostisbehere <span class="prop-team">(CAR)</span></td><td>CAR @ SEA</td><td class="num">0.81</td><td class="num">0.5</td><td class="num">-110</td><td class="num">59%</td><td class="num">52%</td><td class="num edge-neutral">6.7%</td></tr>
-<tr><td class="prop-player">Cam York <span class="prop-team">(PHI)</span></td><td>PHI @ TOR</td><td class="num">0.51</td><td class="num">0.5</td><td class="num">+220</td><td class="num">37%</td><td class="num">31%</td><td class="num edge-neutral">6.0%</td></tr>
-<tr><td class="prop-player">Owen Tippett <span class="prop-team">(PHI)</span></td><td>PHI @ TOR</td><td class="num">0.78</td><td class="num">0.5</td><td class="num">+126</td><td class="num">50%</td><td class="num">44%</td><td class="num edge-neutral">5.9%</td></tr>
-<tr><td class="prop-player">Boone Jenner <span class="prop-team">(CBJ)</span></td><td>CBJ @ NYR</td><td class="num">0.67</td><td class="num">0.5</td><td class="num">+140</td><td class="num">47%</td><td class="num">42%</td><td class="num edge-neutral">5.7%</td></tr>
-<tr><td class="prop-player">Michael Bunting <span class="prop-team">(NSH)</span></td><td>DET @ NSH</td><td class="num">0.45</td><td class="num">0.5</td><td class="num">+185</td><td class="num">39%</td><td class="num">35%</td><td class="num edge-low">3.5%</td></tr>
-<tr><td class="prop-player">Shayne Gostisbehere <span class="prop-team">(CAR)</span></td><td>CAR @ SEA</td><td class="num">0.81</td><td class="num">1.5</td><td class="num">+425</td><td class="num">22%</td><td class="num">19%</td><td class="num edge-low">3.5%</td></tr>
-<tr><td class="prop-player">Brent Burns <span class="prop-team">(COL)</span></td><td>COL @ LAK</td><td class="num">0.45</td><td class="num">0.5</td><td class="num">+200</td><td class="num">37%</td><td class="num">33%</td><td class="num edge-low">3.4%</td></tr>
-<tr><td class="prop-player">Luke Evangelista <span class="prop-team">(NSH)</span></td><td>DET @ NSH</td><td class="num">0.71</td><td class="num">0.5</td><td class="num">+105</td><td class="num">52%</td><td class="num">49%</td><td class="num edge-low">3.2%</td></tr>
+<table class="props-table"><thead><tr><th>Player</th><th>Game</th><th>Proj</th><th>DK Line</th><th>Odds</th><th>Szn</th><th>L5</th><th>Prob</th><th>Edge</th><th>Why</th></tr></thead><tbody>
+<tr><td class="prop-player">Luke Evangelista <span class="prop-team">(NSH)</span></td><td>DET @ NSH</td><td class="num">0.79</td><td class="num">0.5</td><td class="num">+105</td><td class="num">0.76</td><td class="num">1.20</td><td class="num">55%</td><td class="num edge-neutral">5.8%</td><td class="prop-reasons">vs strong D (2.6 points/gm allowed, -13% vs avg); Home ice (+3%)</td></tr>
+<tr><td class="prop-player">Shayne Gostisbehere <span class="prop-team">(CAR)</span></td><td>CAR @ SEA</td><td class="num">0.86</td><td class="num">0.5</td><td class="num">-110</td><td class="num">0.98</td><td class="num">1.00</td><td class="num">58%</td><td class="num edge-neutral">5.5%</td><td class="prop-reasons">vs strong D (2.5 points/gm allowed, -18% vs avg)</td></tr>
+<tr><td class="prop-player">Owen Tippett <span class="prop-team">(PHI)</span></td><td>PHI @ TOR</td><td class="num">0.65</td><td class="num">0.5</td><td class="num">+130</td><td class="num">0.61</td><td class="num">0.40</td><td class="num">48%</td><td class="num edge-neutral">4.3%</td><td class="prop-reasons">vs strong D (2.8 points/gm allowed, -8% vs avg)</td></tr>
+<tr><td class="prop-player">Thomas Harley <span class="prop-team">(DAL)</span></td><td>DAL @ VAN</td><td class="num">0.70</td><td class="num">0.5</td><td class="num">+115</td><td class="num">0.55</td><td class="num">1.20</td><td class="num">50%</td><td class="num edge-low">3.6%</td><td></td></tr>
 </tbody></table>
 </div>
 </div>
@@ -368,10 +357,10 @@ header .generated {
     <span class="day-record"><span class="pending">pending</span></span>
 </div>
 <div class="day-picks"><div class="game-row"><div class="game-header"><span class="matchup">DET @ NSH</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> OVER 5.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
-<div class="game-row"><div class="game-header"><span class="matchup">CBJ @ NYR</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> NYR +1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">CBJ @ NYR</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> NYR ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> CBJ +1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
 <div class="game-row"><div class="game-header"><span class="matchup">PHI @ TOR</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> PHI ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
 <div class="game-row"><div class="game-header"><span class="matchup">DAL @ VAN</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> DAL ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> DAL -1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
-<div class="game-row"><div class="game-header"><span class="matchup">CAR @ SEA</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> CAR ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> CAR -1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div>
+<div class="game-row"><div class="game-header"><span class="matchup">CAR @ SEA</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> CAR ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span></span></div></div>
 <div class="game-row"><div class="game-header"><span class="matchup">COL @ LAK</span></div><div class="game-chips"><span class="pick-chip"><span class="pending">&#9679;</span> COL ML <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span> <span class="pick-chip"><span class="pending">&#9679;</span> COL -1.5 <span class="stars">&#9733;&#9733;&#9733;&#9733;&#9734;</span></span></div></div></div>
 </div><div class="day-block day-nhl day-loss">
 <div class="day-header">
